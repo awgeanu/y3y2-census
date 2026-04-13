@@ -295,10 +295,12 @@ function FormView({ onCaptainAccess }) {
   const [funny] = useState(() => FUNNY_MESSAGES[Math.floor(Math.random() * FUNNY_MESSAGES.length)]);
   const [roster, setRoster] = useState([]);
   const [loadingRoster, setLoadingRoster] = useState(true);
+  const [submittedNames, setSubmittedNames] = useState([]);
 
   useEffect(() => {
     loadStore().then(s => {
       setRoster(s.roster || []);
+      setSubmittedNames((s.responses || []).map(r => r.name.toLowerCase()));
       setLoadingRoster(false);
     });
   }, []);
@@ -350,12 +352,6 @@ function FormView({ onCaptainAccess }) {
   );
 
   if (step === "name") {
-    // Check which players have already submitted
-    const [submittedNames, setSubmittedNames] = useState([]);
-    useEffect(() => {
-      loadStore().then(s => setSubmittedNames((s.responses || []).map(r => r.name.toLowerCase())));
-    }, []);
-
     return (
       <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 32,
         backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.13), transparent)" }}>
