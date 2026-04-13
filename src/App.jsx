@@ -156,7 +156,7 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
         <div style={{ padding: "6px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.3)", display: "flex", gap: 5, flexWrap: "wrap", flexShrink: 0, alignItems: "center" }}>
           <span style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 600, letterSpacing: "0.05em", marginRight: 4 }}>{selected.length}{maxSelect ? "/" + maxSelect : ""}</span>
           {selected.map(h => (
-            <div key={h.name} onClick={() => onToggle(h)} style={{ position: "relative", cursor: "pointer" }}>
+            <div key={h.name === "Deadpool" ? h.name + "|" + h.role : h.name} onClick={() => onToggle(h)} style={{ position: "relative", cursor: "pointer" }}>
               <HeroPortrait hero={h} size={30} selected />
               <div style={{ position: "absolute", top: -3, right: -3, width: 12, height: 12, borderRadius: "50%", background: "#ef4444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 7, fontWeight: 700, color: "#fff" }}>✕</div>
             </div>
@@ -176,11 +176,13 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
             )}
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(86px, 1fr))", gap: 8 }}>
               {gh.map(hero => {
-                const sel = !!selected.find(h => h.name === hero.name);
+                const sel = hero.name === "Deadpool"
+                  ? !!selected.find(h => h.name === "Deadpool" && h.role === hero.role)
+                  : !!selected.find(h => h.name === hero.name);
                 const r = ROLES[hero.role];
                 const locked = maxSelect && !sel && selected.length >= maxSelect;
                 return (
-                  <div key={hero.name} onClick={() => !locked && onToggle(hero)} style={{
+                  <div key={hero.name === "Deadpool" ? hero.name + "|" + hero.role : hero.name} onClick={() => !locked && onToggle(hero)} style={{
                     display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
                     padding: "9px 4px 8px", borderRadius: 12, cursor: locked ? "not-allowed" : "pointer",
                     background: sel ? r.bg : "rgba(255,255,255,0.03)",
@@ -189,6 +191,13 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
                     opacity: locked ? 0.35 : 1,
                   }}>
                     <HeroPortrait hero={hero} size={58} selected={sel} />
+                    {hero.name === "Deadpool" && (
+                      <div style={{ display: "flex", gap: 2, justifyContent: "center", marginTop: -2, marginBottom: -2 }}>
+                        {["🛡️","⚔️","💚"].map(icon => (
+                          <span key={icon} style={{ fontSize: 8, opacity: 0.7 }}>{icon}</span>
+                        ))}
+                      </div>
+                    )}
                     <div style={{ fontSize: 8, fontWeight: 600, letterSpacing: "0.03em", textAlign: "center", lineHeight: 1.3, color: sel ? r.color : "rgba(255,255,255,0.4)", maxWidth: 80, wordBreak: "break-word" }}>
                       {hero.name.toUpperCase()}
                     </div>
@@ -222,8 +231,24 @@ function FormView({ onCaptainAccess }) {
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
   const [funny] = useState(() => FUNNY_MESSAGES[Math.floor(Math.random() * FUNNY_MESSAGES.length)]);
-  const toggle = useCallback(hero =>
-    setSelected(s => s.find(h => h.name === hero.name) ? s.filter(h => h.name !== hero.name) : [...s, hero]), []);
+  const [roster, setRoster] = useState([]);
+  const [loadingRoster, setLoadingRoster] = useState(true);
+
+  useEffect(() => {
+    loadStore().then(s => {
+      setRoster(s.roster || []);
+      setLoadingRoster(false);
+    });
+  }, []);
+  const toggle = useCallback(hero => {
+    setSelected(s => {
+      // Deadpool is tracked by name+role so he can be in multiple categories
+      const isDeadpool = hero.name === "Deadpool";
+      const key = isDeadpool ? hero.name + "|" + hero.role : hero.name;
+      const existing = s.find(h => isDeadpool ? (h.name === hero.name && h.role === hero.role) : h.name === hero.name);
+      return existing ? s.filter(h => isDeadpool ? !(h.name === hero.name && h.role === hero.role) : h.name !== hero.name) : [...s, hero];
+    });
+  }, []);
 
   const submit = async () => {
     if (!name.trim() || selected.length === 0) return;
@@ -262,42 +287,73 @@ function FormView({ onCaptainAccess }) {
     </div>
   );
 
-  if (step === "name") return (
-    <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 32,
-      backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.13), transparent)" }}>
-      <div style={{ width: "100%", maxWidth: 400 }}>
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", marginBottom: 10, textTransform: "uppercase" }}>Y3Y2</div>
-          <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>Hero Pool</div>
-          <div style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", marginTop: 10, fontWeight: 400 }}>Pick your heroes for the captain</div>
-        </div>
-        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", color: "rgba(255,255,255,0.3)", marginBottom: 8, textTransform: "uppercase" }}>Gamertag</div>
-        <input autoFocus value={name} onChange={e => setName(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && name.trim() && setStep("pick")}
-          placeholder="Your in-game name"
-          style={{ width: "100%", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px 16px", color: "#fff", fontSize: 16, fontFamily: FONT, outline: "none", transition: "border .15s" }} />
-        <button onClick={() => name.trim() && setStep("pick")}
-          style={{ marginTop: 10, width: "100%", background: name.trim() ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: "14px", color: name.trim() ? "#000" : "rgba(255,255,255,0.2)", fontSize: 15, fontWeight: 600, cursor: name.trim() ? "pointer" : "default", fontFamily: FONT, transition: "all .2s" }}>
-          Continue
-        </button>
-        <div style={{ marginTop: 48, textAlign: "center" }}>
-          <button onClick={onCaptainAccess} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.08)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", fontFamily: FONT, textTransform: "uppercase" }}>
-            Captain Access
-          </button>
-        </div>
-        {/* Jeff the Land Shark chillin at the bottom */}
-        <div style={{ marginTop: 36, textAlign: "center", opacity: 0.7 }}>
-          <img
-            src="https://media.tenor.com/aMzFAr6Ke4kAAAAi/jeff-the-land-shark-marvel.gif"
-            alt="Jeff the Land Shark"
-            style={{ width: 72, height: 72, objectFit: "contain", borderRadius: "50%", display: "inline-block" }}
-            onError={e => { e.target.src = "https://media1.tenor.com/m/aMzFAr6Ke4kAAAAd/jeff-the-land-shark-marvel.gif"; }}
-          />
-          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
+  if (step === "name") {
+    // Check which players have already submitted
+    const [submittedNames, setSubmittedNames] = useState([]);
+    useEffect(() => {
+      loadStore().then(s => setSubmittedNames((s.responses || []).map(r => r.name.toLowerCase())));
+    }, []);
+
+    return (
+      <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 32,
+        backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.13), transparent)" }}>
+        <div style={{ width: "100%", maxWidth: 400 }}>
+          <div style={{ textAlign: "center", marginBottom: 40 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", marginBottom: 10, textTransform: "uppercase" }}>Y3Y2</div>
+            <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>Hero Pool</div>
+            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", marginTop: 10, fontWeight: 400 }}>Who are you?</div>
+          </div>
+
+          {loadingRoster ? (
+            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13, padding: "20px 0" }}>Loading…</div>
+          ) : roster.length === 0 ? (
+            <div style={{ ...glass({ borderRadius: 14, padding: "20px" }), textAlign: "center" }}>
+              <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
+              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Roster not set up yet</div>
+              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 6 }}>Ask your captain to add players in the dashboard</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {roster.map(player => {
+                const alreadySubmitted = submittedNames.includes(player.toLowerCase());
+                return (
+                  <button key={player}
+                    onClick={() => { if (!alreadySubmitted) { setName(player); setStep("pick"); } }}
+                    disabled={alreadySubmitted}
+                    style={{
+                      ...glass({ borderRadius: 12, padding: "14px 18px" }),
+                      display: "flex", alignItems: "center", justifyContent: "space-between",
+                      cursor: alreadySubmitted ? "default" : "pointer",
+                      opacity: alreadySubmitted ? 0.4 : 1,
+                      transition: "all .15s",
+                      background: alreadySubmitted ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)",
+                    }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: alreadySubmitted ? "rgba(255,255,255,0.4)" : "#fff" }}>{player}</span>
+                    {alreadySubmitted
+                      ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500 }}>✓ submitted</span>
+                      : <span style={{ fontSize: 14, color: "rgba(255,255,255,0.25)" }}>›</span>
+                    }
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ marginTop: 48, textAlign: "center" }}>
+            <button onClick={onCaptainAccess} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.08)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", fontFamily: FONT, textTransform: "uppercase" }}>
+              Captain Access
+            </button>
+          </div>
+          <div style={{ marginTop: 36, textAlign: "center", opacity: 0.7 }}>
+            <img src="https://media.tenor.com/aMzFAr6Ke4kAAAAi/jeff-the-land-shark-marvel.gif" alt="Jeff the Land Shark"
+              style={{ width: 72, height: 72, objectFit: "contain", borderRadius: "50%", display: "inline-block" }}
+              onError={e => { e.target.src = "https://media1.tenor.com/m/aMzFAr6Ke4kAAAAd/jeff-the-land-shark-marvel.gif"; }} />
+            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
     <div style={{ height: "100vh", background: "#000", fontFamily: FONT, display: "flex", flexDirection: "column", overflow: "hidden" }}>
@@ -541,6 +597,58 @@ function CompBuilder({ responses }) {
 }
 
 // ── Dashboard ─────────────────────────────────────────────────────────────────
+
+// ── Roster Manager ────────────────────────────────────────────────────────────
+function RosterManager() {
+  const [roster, setRoster] = useState([]);
+  const [newName, setNewName] = useState("");
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { loadStore().then(s => { setRoster(s.roster || []); setLoading(false); }); }, []);
+  const saveRoster = async (updated) => {
+    setRoster(updated);
+    const store = await loadStore();
+    store.roster = updated;
+    await saveStore(store);
+  };
+  const addPlayer = async () => {
+    const n = newName.trim();
+    if (!n || roster.includes(n)) return;
+    await saveRoster([...roster, n]);
+    setNewName("");
+  };
+  const removePlayer = async (name) => { await saveRoster(roster.filter(p => p !== name)); };
+  if (loading) return <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,0.2)", fontFamily: FONT }}>Loading</div>;
+  return (
+    <div style={{ maxWidth: 480, height: "100%", overflowY: "auto" }}>
+      <div style={{ ...glass({ borderRadius: 14, padding: "16px" }), marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "rgba(255,255,255,0.3)", marginBottom: 12, textTransform: "uppercase" }}>Add Player</div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addPlayer()} placeholder="Player gamertag"
+            style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, padding: "11px 14px", color: "#fff", fontSize: 14, fontFamily: FONT, outline: "none" }} />
+          <button onClick={addPlayer} disabled={!newName.trim() || roster.includes(newName.trim())}
+            style={{ background: newName.trim() ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.06)", border: "none", borderRadius: 10, padding: "11px 18px", color: newName.trim() ? "#000" : "rgba(255,255,255,0.2)", fontSize: 14, fontWeight: 600, cursor: newName.trim() ? "pointer" : "default", fontFamily: FONT }}>Add</button>
+        </div>
+      </div>
+      {roster.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "32px 0", color: "rgba(255,255,255,0.2)", fontSize: 13, fontFamily: FONT }}>No players yet. Add them above and they will appear on the form.</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "rgba(255,255,255,0.25)", marginBottom: 4, textTransform: "uppercase" }}>{roster.length} player{roster.length !== 1 ? "s" : ""}</div>
+          {roster.map(player => (
+            <div key={player} style={{ ...glass({ borderRadius: 10, padding: "12px 14px" }), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.6),rgba(96,165,250,0.6))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{player[0].toUpperCase()}</div>
+                <span style={{ fontSize: 14, fontWeight: 500, color: "#fff" }}>{player}</span>
+              </div>
+              <button onClick={() => removePlayer(player)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 14, padding: "2px 6px", fontFamily: FONT }}>x</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Dashboard({ onLock }) {
   const [responses, setResponses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -585,9 +693,9 @@ function Dashboard({ onLock }) {
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.06em" }}>CAPTAIN DASHBOARD</div>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
-          {["responses", "builder"].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s", textTransform: "capitalize" }}>
-              {t === "responses" ? "Responses" : "Comp Builder"}
+          {["responses", "builder", "roster"].map(t => (
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s" }}>
+              {t === "responses" ? "Responses" : t === "builder" ? "Comp Builder" : "Roster"}
             </button>
           ))}
         </div>
@@ -600,7 +708,9 @@ function Dashboard({ onLock }) {
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: "16px 20px" }}>
-        {tab === "responses" ? (
+        {tab === "roster" ? (
+          <RosterManager />
+        ) : tab === "responses" ? (
           loading ? (
             <div style={{ textAlign: "center", padding: 60, color: "rgba(255,255,255,0.15)" }}>Loading…</div>
           ) : responses.length === 0 ? (
