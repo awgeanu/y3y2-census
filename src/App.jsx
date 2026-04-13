@@ -213,6 +213,68 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
   );
 }
 
+
+// ── Player Dropdown ───────────────────────────────────────────────────────────
+function PlayerDropdown({ roster, submittedNames, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState("");
+  const availableCount = roster.filter(p => !submittedNames.includes(p.toLowerCase())).length;
+  const handleSelect = (player) => {
+    if (submittedNames.includes(player.toLowerCase())) return;
+    setSelected(player); setOpen(false); onSelect(player);
+  };
+  return (
+    <div style={{ position: "relative" }}>
+      <button onClick={() => setOpen(o => !o)} style={{
+        width: "100%", background: "rgba(255,255,255,0.07)",
+        backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+        border: "1px solid rgba(255,255,255,0.12)", borderRadius: 14,
+        padding: "16px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
+        cursor: "pointer", fontFamily: FONT, transition: "all .15s",
+        color: selected ? "#fff" : "rgba(255,255,255,0.35)",
+      }}>
+        <span style={{ fontSize: 16, fontWeight: selected ? 600 : 400 }}>{selected || "Select your name"}</span>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform .2s", display: "inline-block" }}>▾</span>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 99 }} />
+          <div style={{
+            position: "absolute", top: "calc(100% + 8px)", left: 0, right: 0, zIndex: 100,
+            background: "rgba(18,18,18,0.88)", backdropFilter: "blur(40px)", WebkitBackdropFilter: "blur(40px)",
+            border: "1px solid rgba(255,255,255,0.1)", borderRadius: 16, overflow: "hidden",
+            boxShadow: "0 24px 60px rgba(0,0,0,0.6), 0 0 0 0.5px rgba(255,255,255,0.05)",
+          }}>
+            {availableCount === 0 && (
+              <div style={{ padding: "16px 18px", fontSize: 13, color: "rgba(255,255,255,0.3)", textAlign: "center", fontFamily: FONT }}>Everyone has submitted</div>
+            )}
+            {roster.map((player, i) => {
+              const done = submittedNames.includes(player.toLowerCase());
+              return (
+                <div key={player} onClick={() => handleSelect(player)} style={{
+                  padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
+                  borderBottom: i < roster.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                  cursor: done ? "default" : "pointer", opacity: done ? 0.45 : 1,
+                }}
+                onMouseEnter={e => { if (!done) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: done ? "rgba(74,222,128,0.15)" : "linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: done ? "#4ade80" : "#fff", flexShrink: 0 }}>
+                      {done ? "v" : player[0].toUpperCase()}
+                    </div>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: done ? "rgba(255,255,255,0.4)" : "#fff", fontFamily: FONT }}>{player}</span>
+                  </div>
+                  {done ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500, fontFamily: FONT }}>submitted</span> : <span style={{ fontSize: 16, color: "rgba(255,255,255,0.2)" }}>{">"}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Form View ─────────────────────────────────────────────────────────────────
 const FUNNY_MESSAGES = [
   "now stop doomscrolling and go warm up",
@@ -305,38 +367,19 @@ function FormView({ onCaptainAccess }) {
           </div>
 
           {loadingRoster ? (
-            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13, padding: "20px 0" }}>Loading…</div>
+            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13, padding: "20px 0", fontFamily: FONT }}>Loading…</div>
           ) : roster.length === 0 ? (
-            <div style={{ ...glass({ borderRadius: 14, padding: "20px" }), textAlign: "center" }}>
-              <div style={{ fontSize: 24, marginBottom: 8 }}>⏳</div>
-              <div style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Roster not set up yet</div>
+            <div style={{ ...glass({ borderRadius: 14, padding: "24px" }), textAlign: "center" }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+              <div style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Roster not set up yet</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 6 }}>Ask your captain to add players in the dashboard</div>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {roster.map(player => {
-                const alreadySubmitted = submittedNames.includes(player.toLowerCase());
-                return (
-                  <button key={player}
-                    onClick={() => { if (!alreadySubmitted) { setName(player); setStep("pick"); } }}
-                    disabled={alreadySubmitted}
-                    style={{
-                      ...glass({ borderRadius: 12, padding: "14px 18px" }),
-                      display: "flex", alignItems: "center", justifyContent: "space-between",
-                      cursor: alreadySubmitted ? "default" : "pointer",
-                      opacity: alreadySubmitted ? 0.4 : 1,
-                      transition: "all .15s",
-                      background: alreadySubmitted ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)",
-                    }}>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: alreadySubmitted ? "rgba(255,255,255,0.4)" : "#fff" }}>{player}</span>
-                    {alreadySubmitted
-                      ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500 }}>✓ submitted</span>
-                      : <span style={{ fontSize: 14, color: "rgba(255,255,255,0.25)" }}>›</span>
-                    }
-                  </button>
-                );
-              })}
-            </div>
+            <PlayerDropdown
+              roster={roster}
+              submittedNames={submittedNames}
+              onSelect={player => { setName(player); setStep("pick"); }}
+            />
           )}
 
           <div style={{ marginTop: 48, textAlign: "center" }}>
@@ -345,9 +388,8 @@ function FormView({ onCaptainAccess }) {
             </button>
           </div>
           <div style={{ marginTop: 36, textAlign: "center", opacity: 0.7 }}>
-            <img src="https://media.tenor.com/aMzFAr6Ke4kAAAAi/jeff-the-land-shark-marvel.gif" alt="Jeff the Land Shark"
-              style={{ width: 72, height: 72, objectFit: "contain", borderRadius: "50%", display: "inline-block" }}
-              onError={e => { e.target.src = "https://media1.tenor.com/m/aMzFAr6Ke4kAAAAd/jeff-the-land-shark-marvel.gif"; }} />
+            <img src="https://media1.tenor.com/m/c4r46CfpfR8AAAAd/jeff-jeff-the-land-shark.gif" alt="Jeff the Land Shark"
+              style={{ width: 80, height: 80, objectFit: "contain", borderRadius: "50%", display: "inline-block" }} />
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
           </div>
         </div>
