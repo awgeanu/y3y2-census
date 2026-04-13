@@ -1767,4 +1767,4 @@ export default function App() {
       {screen === "dashboard"                      && <Dashboard onLock={() => setScreen("form")} />}
     </>
   );
-}// ── Form View ─────────────────────────────────────────────────────────────────
+}
