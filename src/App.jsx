@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { loadStore, saveStore } from "./supabase.js";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { loadStore, saveStore, loadCompReviews, saveCompReview, updateReviewStatus, loadAllAvailability, savePlayerAvailability, loadDraft, saveDraft, clearDraft } from "./supabase.js";
 import { ICONS } from "./icons.js";
 
 const FONT = "'SF Pro Display', 'SF Pro Text', -apple-system, 'Helvetica Neue', sans-serif";
@@ -341,6 +341,11 @@ function FormView({ onCaptainAccess }) {
   const [roster, setRoster] = useState([]);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [submittedNames, setSubmittedNames] = useState([]);
+  const [draftActive, setDraftActive] = useState(false);
+
+  useEffect(() => {
+    loadDraft().then(d => setDraftActive(!!(d && d.active)));
+  }, []);
 
   useEffect(() => {
     loadStore().then(s => {
@@ -605,6 +610,7 @@ function CompBuilder({ responses }) {
             style={{ ...glass({ borderRadius: 12, padding: "10px 12px" }), cursor: "pointer", background: editingIdx === idx ? "rgba(255,255,255,0.07)" : "rgba(255,255,255,0.03)", borderColor: editingIdx === idx ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)", transition: "all .12s" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: editingIdx === idx ? "#fff" : "rgba(255,255,255,0.6)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{c.name}</div>
+              <button onClick={e => { e.stopPropagation(); const updated = comps.map((ci,ii) => ii === idx ? {...ci, published: !ci.published} : ci); saveComps(updated); }} style={{ background: "none", border: "none", color: c.published ? "#4ade80" : "rgba(255,255,255,0.25)", fontSize: 10, cursor: "pointer", padding: "0 4px", flexShrink: 0, fontFamily: FONT, fontWeight: 600 }}>{c.published ? "● live" : "○ share"}</button>
               <button onClick={e => { e.stopPropagation(); deleteComp(idx); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 11, cursor: "pointer", padding: "0 2px", flexShrink: 0 }}>✕</button>
             </div>
             <div style={{ display: "flex", gap: 3 }}>
@@ -743,6 +749,9 @@ function Dashboard({ onLock }) {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("responses"); // "responses" | "builder"
   const [refreshed, setRefreshed] = useState(null);
+  const [compsForReview, setCompsForReview] = useState([]);
+  const loadCompsForReview = async () => { const s = await loadStore(); setCompsForReview(s.comps || []); };
+  useEffect(() => { loadCompsForReview(); }, []);
   const [copied, setCopied] = useState(false);
 
   const load = async () => {
@@ -782,9 +791,9 @@ function Dashboard({ onLock }) {
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.06em" }}>CAPTAIN DASHBOARD</div>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
-          {["responses", "builder", "roster"].map(t => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s" }}>
-              {t === "responses" ? "Responses" : t === "builder" ? "Comp Builder" : "Roster"}
+          {[["responses","Responses"],["builder","Comp Builder"],["reviews","Reviews"],["draft","Draft"],["calendar","Calendar"],["roster","Roster"]].map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s", whiteSpace: "nowrap" }}>
+              {label}
             </button>
           ))}
         </div>
@@ -868,6 +877,12 @@ function Dashboard({ onLock }) {
               {refreshed && <div style={{ textAlign: "center", marginTop: 14, fontSize: 9, color: "rgba(255,255,255,0.08)" }}>Refreshed {refreshed.toLocaleTimeString()}</div>}
             </div>
           )
+        ) : tab === "reviews" ? (
+          <ReviewsDashboard comps={compsForReview} onRefreshComps={loadCompsForReview} />
+        ) : tab === "draft" ? (
+          <DraftDashboard roster={responses.map(r => r.name)} responses={responses} playerName="captain" isCaptain={true} />
+        ) : tab === "calendar" ? (
+          <CalendarDashboard />
         ) : (
           <CompBuilder responses={responses} />
         )}
@@ -875,6 +890,791 @@ function Dashboard({ onLock }) {
     </div>
   );
 }
+
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function relativeTime(ts) {
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return m + 'm ago';
+  const h = Math.floor(m / 60);
+  if (h < 24) return h + 'h ago';
+  return Math.floor(h / 24) + 'd ago';
+}
+
+function generateDays(count = 35) {
+  const days = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  for (let i = 0; i < count; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    days.push(d.toISOString().split('T')[0]);
+  }
+  return days;
+}
+
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function formatDay(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return { day: DAY_LABELS[d.getDay()], date: d.getDate(), month: MONTH_LABELS[d.getMonth()] };
+}
+
+
+// ── Player Portal Wrapper (loads live status) ─────────────────────────────────
+function PlayerPortalWrapper({ name, submittedInSession, submittedNames, draftActive, onHeroes, onReview, onAvailability, onDraft, onBack }) {
+  const [hasAvailability, setHasAvailability] = useState(false);
+  const [heroCount, setHeroCount] = useState(submittedInSession);
+
+  useEffect(() => {
+    loadAllAvailability().then(rows => {
+      const mine = rows.find(r => r.player_name === name);
+      setHasAvailability(!!(mine && mine.available_dates && mine.available_dates.length > 0));
+    });
+    // Hero count from responses
+    loadStore().then(s => {
+      const resp = (s.responses || []).find(r => r.name.toLowerCase() === name.toLowerCase());
+      if (resp) setHeroCount(resp.heroes.length);
+    });
+  }, []);
+
+  return (
+    <PlayerPortal
+      name={name}
+      submittedHeroes={heroCount}
+      hasAvailability={hasAvailability}
+      draftActive={draftActive}
+      onHeroes={onHeroes}
+      onReview={onReview}
+      onAvailability={onAvailability}
+      onDraft={onDraft}
+      onBack={onBack}
+    />
+  );
+}
+
+// ── Player Portal ─────────────────────────────────────────────────────────────
+function PlayerPortal({ name, submittedHeroes, hasAvailability, draftActive, onHeroes, onReview, onAvailability, onDraft, onBack }) {
+  const options = [
+    { key: 'heroes', icon: '⚔️', label: 'Hero Pool', desc: submittedHeroes > 0 ? submittedHeroes + ' heroes submitted' : 'Not submitted yet', done: submittedHeroes > 0, action: onHeroes },
+    { key: 'review', icon: '📋', label: 'Review Comps', desc: 'View captain comps & leave feedback', done: false, action: onReview },
+    { key: 'availability', icon: '📅', label: 'Availability', desc: hasAvailability ? 'Schedule updated' : 'Mark your available days', done: hasAvailability, action: onAvailability },
+  ];
+  if (draftActive) options.push({ key: 'draft', icon: '🎯', label: 'Live Draft', desc: 'Draft is active — join now', done: false, action: onDraft, live: true });
+
+  return (
+    <div style={{ minHeight: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 28,
+      backgroundImage: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.1), transparent)' }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.25)', marginBottom: 6, textTransform: 'uppercase' }}>Y3Y2</div>
+          <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: '-0.02em', color: '#fff', lineHeight: 1 }}>Hey, {name} 👋</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', marginTop: 6 }}>What do you want to do?</div>
+        </div>
+        <div style={{ ...glass({ borderRadius: 20, overflow: 'hidden', padding: 0 }) }}>
+          {options.map((opt, i) => (
+            <button key={opt.key} onClick={opt.action} style={{
+              width: '100%', background: opt.live ? 'rgba(248,113,113,0.06)' : 'transparent',
+              border: 'none', borderBottom: i < options.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 14,
+              cursor: 'pointer', fontFamily: FONT, transition: 'background .12s', textAlign: 'left',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background = opt.live ? 'rgba(248,113,113,0.12)' : 'rgba(255,255,255,0.05)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = opt.live ? 'rgba(248,113,113,0.06)' : 'transparent'; }}>
+              <div style={{ width: 40, height: 40, borderRadius: 12, background: opt.live ? 'rgba(248,113,113,0.15)' : 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{opt.icon}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: opt.live ? '#f87171' : '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {opt.label}
+                  {opt.live && <span style={{ fontSize: 9, background: '#ef4444', color: '#fff', borderRadius: 4, padding: '2px 5px', fontWeight: 700, letterSpacing: '0.06em' }}>LIVE</span>}
+                </div>
+                <div style={{ fontSize: 12, color: opt.done ? '#4ade80' : 'rgba(255,255,255,0.3)', marginTop: 2 }}>{opt.done ? '✓ ' : ''}{opt.desc}</div>
+              </div>
+              <span style={{ fontSize: 16, color: 'rgba(255,255,255,0.2)' }}>›</span>
+            </button>
+          ))}
+        </div>
+        <div style={{ marginTop: 24, textAlign: 'center' }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.2)', fontSize: 12, cursor: 'pointer', fontFamily: FONT }}>← Not you?</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Player Comp Review ────────────────────────────────────────────────────────
+function PlayerCompReview({ playerName, onBack }) {
+  const [comps, setComps] = useState([]);
+  const [expandedId, setExpandedId] = useState(null);
+  const [comment, setComment] = useState('');
+  const [suggestSlot, setSuggestSlot] = useState(null);
+  const [suggestSearch, setSuggestSearch] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState({});
+
+  useEffect(() => {
+    loadStore().then(s => setComps((s.comps || []).filter(c => c.published)));
+  }, []);
+
+  const handleComment = async (compId) => {
+    if (!comment.trim()) return;
+    setSubmitting(true);
+    await saveCompReview({ compId, playerName, comment: comment.trim() });
+    setComment('');
+    setSubmitted(p => ({ ...p, [compId + '_comment']: true }));
+    setSubmitting(false);
+  };
+
+  const handleSuggest = async (compId, slotIndex, hero) => {
+    setSubmitting(true);
+    await saveCompReview({ compId, playerName, slotIndex, suggestedHero: hero });
+    setSuggestSlot(null);
+    setSuggestSearch('');
+    setSubmitted(p => ({ ...p, [compId + '_' + slotIndex]: true }));
+    setSubmitting(false);
+  };
+
+  const suggestHeroes = HEROES.filter(h => h.name.toLowerCase().includes(suggestSearch.toLowerCase()));
+
+  if (step === 'portal') {
+    return (
+      <PlayerPortalWrapper
+        name={name}
+        submittedInSession={selected.length}
+        submittedNames={submittedNames}
+        draftActive={draftActive}
+        draftActive={draftActive}
+        onHeroes={() => setStep('pick')}
+        onReview={() => setStep('review')}
+        onAvailability={() => setStep('availability')}
+        onDraft={() => setStep('draft_player')}
+        onBack={() => { setName(''); setStep('name'); }}
+      />
+    );
+  }
+
+  if (step === 'review') return <PlayerCompReview playerName={name} onBack={() => setStep('portal')} />;
+  if (step === 'availability') return <PlayerAvailability playerName={name} onBack={() => setStep('portal')} />;
+  if (step === 'draft_player') return (
+    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={() => setStep('portal')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>‹</button>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Live Draft</div>
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden', padding: 16 }}>
+        <DraftDashboard roster={[]} responses={[]} playerName={name} isCaptain={false} />
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>Review Comps</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{comps.length} published comp{comps.length !== 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
+        {comps.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.2)' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>No comps published yet</div>
+            <div style={{ fontSize: 12, marginTop: 4 }}>Your captain hasn't shared any comps</div>
+          </div>
+        ) : comps.map(comp => {
+          const isOpen = expandedId === comp.id;
+          return (
+            <div key={comp.id} style={{ ...glass({ borderRadius: 16, marginBottom: 10, overflow: 'hidden', padding: 0 }) }}>
+              <button onClick={() => setExpandedId(isOpen ? null : comp.id)} style={{
+                width: '100%', background: 'transparent', border: 'none', padding: '14px 16px',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontFamily: FONT,
+              }}>
+                <div style={{ textAlign: 'left' }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{comp.name}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
+                    {comp.slots.filter(Boolean).length}/6 heroes · tap to {isOpen ? 'collapse' : 'review'}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  {comp.slots.slice(0, 4).filter(Boolean).map((h, i) => <HeroPortrait key={i} hero={h} size={28} />)}
+                  <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.25)', marginLeft: 4 }}>{isOpen ? '▴' : '▾'}</span>
+                </div>
+              </button>
+
+              {isOpen && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px' }}>
+                  {/* 6 slots */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+                    {comp.slots.map((slot, si) => {
+                      const hasSuggested = submitted[comp.id + '_' + si];
+                      return (
+                        <div key={si} style={{ textAlign: 'center' }}>
+                          <div style={{ ...glass({ borderRadius: 12, padding: '10px 6px', border: '1px solid rgba(255,255,255,0.07)' }) }}>
+                            {slot ? (
+                              <>
+                                <HeroPortrait hero={slot} size={48} selected />
+                                <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', marginTop: 4, fontWeight: 600 }}>{slot.name.split(' ').pop().toUpperCase()}</div>
+                              </>
+                            ) : (
+                              <div style={{ height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.1)', fontSize: 20 }}>+</div>
+                            )}
+                            <button onClick={() => { setSuggestSlot({ compId: comp.id, slotIndex: si, current: slot }); setSuggestSearch(''); }}
+                              style={{ marginTop: 6, width: '100%', background: hasSuggested ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.05)', border: '1px solid ' + (hasSuggested ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.08)'), color: hasSuggested ? '#4ade80' : 'rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 0', fontSize: 9, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                              {hasSuggested ? '✓ sent' : '💬 suggest'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Comment */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.25)', marginBottom: 8, textTransform: 'uppercase' }}>Leave a comment</div>
+                    {submitted[comp.id + '_comment'] ? (
+                      <div style={{ fontSize: 13, color: '#4ade80', textAlign: 'center', padding: '8px 0' }}>✓ Comment sent</div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Your thoughts on this comp..."
+                          style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: FONT, outline: 'none' }} />
+                        <button onClick={() => handleComment(comp.id)} disabled={!comment.trim() || submitting}
+                          style={{ background: comment.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '9px 14px', color: comment.trim() ? '#000' : 'rgba(255,255,255,0.2)', fontSize: 13, fontWeight: 600, cursor: comment.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
+                          Send
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Hero suggest modal */}
+      {suggestSlot && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end' }} onClick={() => setSuggestSlot(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: 'rgba(12,12,16,0.97)', backdropFilter: 'blur(40px)', borderRadius: '20px 20px 0 0', border: '1px solid rgba(255,255,255,0.08)', padding: 20, maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Suggest replacement for slot {suggestSlot.slotIndex + 1}</div>
+            <input autoFocus value={suggestSearch} onChange={e => setSuggestSearch(e.target.value)} placeholder="Search hero..."
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 14, fontFamily: FONT, outline: 'none', marginBottom: 10 }} />
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {suggestHeroes.map(hero => (
+                <button key={hero.name} onClick={() => handleSuggest(suggestSlot.compId, suggestSlot.slotIndex, hero)}
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 4px', cursor: 'pointer', fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <HeroPortrait hero={hero} size={44} />
+                  <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textAlign: 'center' }}>{hero.name.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Player Availability ───────────────────────────────────────────────────────
+function PlayerAvailability({ playerName, onBack }) {
+  const [marked, setMarked] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [allAvail, setAllAvail] = useState([]);
+  const days = generateDays(35);
+
+  useEffect(() => {
+    savePlayerAvailability(playerName, []).catch(() => {}); // ensure row exists
+    loadAllAvailability().then(rows => {
+      const mine = rows.find(r => r.player_name === playerName);
+      if (mine) setMarked(mine.available_dates || []);
+      setAllAvail(rows);
+    });
+  }, []);
+
+  const toggle = (d) => setMarked(m => m.includes(d) ? m.filter(x => x !== d) : [...m, d]);
+
+  const save = async () => {
+    setSaving(true);
+    await savePlayerAvailability(playerName, marked);
+    setSaving(false); setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  // Count other players available per day
+  const countMap = {};
+  allAvail.filter(r => r.player_name !== playerName).forEach(r => {
+    (r.available_dates || []).forEach(d => { countMap[d] = (countMap[d] || 0) + 1; });
+  });
+
+  // Group days into weeks
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+
+  return (
+    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>Availability</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>CT · ET +1 · PT −2 · tap days you can play</div>
+        </div>
+        <button onClick={save} disabled={saving}
+          style={{ background: saved ? 'rgba(74,222,128,0.15)' : 'rgba(255,255,255,0.9)', border: saved ? '1px solid rgba(74,222,128,0.3)' : 'none', borderRadius: 10, padding: '8px 16px', color: saved ? '#4ade80' : '#000', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT, transition: 'all .2s' }}>
+          {saving ? '…' : saved ? '✓ Saved' : 'Save'}
+        </button>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+        {/* Day labels */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+          {DAY_LABELS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.2)', padding: '4px 0' }}>{d}</div>)}
+        </div>
+        {/* Weeks */}
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+            {week.map(day => {
+              const { day: dayName, date, month } = formatDay(day);
+              const isMine = marked.includes(day);
+              const othersCount = countMap[day] || 0;
+              const isToday = day === new Date().toISOString().split('T')[0];
+              return (
+                <button key={day} onClick={() => toggle(day)} style={{
+                  background: isMine ? 'rgba(74,222,128,0.18)' : othersCount > 0 ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                  border: isMine ? '1px solid rgba(74,222,128,0.4)' : isToday ? '1px solid rgba(255,255,255,0.2)' : '1px solid rgba(255,255,255,0.05)',
+                  borderRadius: 10, padding: '8px 4px', cursor: 'pointer', fontFamily: FONT, textAlign: 'center', transition: 'all .12s',
+                }}>
+                  {wi === 0 && <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.25)', marginBottom: 2 }}>{month}</div>}
+                  <div style={{ fontSize: 15, fontWeight: 600, color: isMine ? '#4ade80' : isToday ? '#fff' : 'rgba(255,255,255,0.5)' }}>{date}</div>
+                  {othersCount > 0 && (
+                    <div style={{ marginTop: 3, display: 'flex', justifyContent: 'center', gap: 2 }}>
+                      {Array.from({ length: Math.min(othersCount, 4) }).map((_, i) => (
+                        <div key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: 'rgba(96,165,250,0.6)' }} />
+                      ))}
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+        <div style={{ padding: '12px 0', display: 'flex', gap: 16, justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+            <div style={{ width: 10, height: 10, borderRadius: 3, background: 'rgba(74,222,128,0.3)', border: '1px solid rgba(74,222,128,0.5)' }} /> You
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>
+            <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(96,165,250,0.6)' }} /> Teammates
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Reviews Dashboard (captain) ───────────────────────────────────────────────
+function ReviewsDashboard({ comps, onRefreshComps }) {
+  const [reviews, setReviews] = useState({});
+  const [expanded, setExpanded] = useState(null);
+  const publishedComps = comps.filter(c => c.published);
+
+  const loadReviews = async (compId) => {
+    const data = await loadCompReviews(compId);
+    setReviews(r => ({ ...r, [compId]: data }));
+  };
+
+  useEffect(() => {
+    publishedComps.forEach(c => loadReviews(c.id));
+  }, [comps.length]);
+
+  const handleApprove = async (review, comp) => {
+    if (review.suggested_hero && review.slot_index !== null) {
+      const hero = typeof review.suggested_hero === 'string' ? JSON.parse(review.suggested_hero) : review.suggested_hero;
+      const store = await loadStore();
+      store.comps = store.comps.map(c => {
+        if (String(c.id) !== String(comp.id)) return c;
+        const slots = [...c.slots];
+        slots[review.slot_index] = hero;
+        return { ...c, slots };
+      });
+      await saveStore(store);
+      onRefreshComps();
+    }
+    await updateReviewStatus(review.id, 'approved');
+    loadReviews(comp.id);
+  };
+
+  const handleDismiss = async (review) => {
+    await updateReviewStatus(review.id, 'dismissed');
+    loadReviews(review.comp_id);
+  };
+
+  if (publishedComps.length === 0) return (
+    <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.2)', fontFamily: FONT }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+      <div style={{ fontSize: 14, fontWeight: 500 }}>No published comps</div>
+      <div style={{ fontSize: 12, marginTop: 4 }}>Publish comps from the Comp Builder tab</div>
+    </div>
+  );
+
+  return (
+    <div style={{ height: '100%', overflowY: 'auto', paddingBottom: 20 }}>
+      {publishedComps.map(comp => {
+        const compReviews = reviews[comp.id] || [];
+        const pending = compReviews.filter(r => r.status === 'pending');
+        const isOpen = expanded === comp.id;
+        return (
+          <div key={comp.id} style={{ ...glass({ borderRadius: 14, marginBottom: 10, overflow: 'hidden', padding: 0 }) }}>
+            <button onClick={() => setExpanded(isOpen ? null : comp.id)} style={{ width: '100%', background: 'transparent', border: 'none', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', fontFamily: FONT }}>
+              <div style={{ flex: 1, textAlign: 'left' }}>
+                <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{comp.name}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{compReviews.length} feedback · {pending.length} pending</div>
+              </div>
+              {pending.length > 0 && <div style={{ background: '#ef4444', color: '#fff', borderRadius: 10, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>{pending.length}</div>}
+              <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.25)' }}>{isOpen ? '▴' : '▾'}</span>
+            </button>
+
+            {isOpen && (
+              <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px' }}>
+                {compReviews.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', textAlign: 'center', padding: '12px 0' }}>No feedback yet</div>
+                ) : compReviews.map(r => {
+                  const hero = r.suggested_hero ? (typeof r.suggested_hero === 'string' ? JSON.parse(r.suggested_hero) : r.suggested_hero) : null;
+                  return (
+                    <div key={r.id} style={{ ...glass({ borderRadius: 10, padding: '12px 14px', marginBottom: 8, background: r.status === 'pending' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)', opacity: r.status !== 'pending' ? 0.5 : 1 }) }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>{r.player_name[0].toUpperCase()}</div>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{r.player_name}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{relativeTime(r.created_at)}</span>
+                        </div>
+                        {r.status !== 'pending' && <span style={{ fontSize: 10, color: r.status === 'approved' ? '#4ade80' : 'rgba(255,255,255,0.3)', fontWeight: 600 }}>{r.status === 'approved' ? '✓ Approved' : 'Dismissed'}</span>}
+                      </div>
+                      {r.comment && <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginBottom: 6, lineHeight: 1.5 }}>"{r.comment}"</div>}
+                      {hero && r.slot_index !== null && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Slot {r.slot_index + 1}:</div>
+                          {comp.slots[r.slot_index] && <HeroPortrait hero={comp.slots[r.slot_index]} size={32} />}
+                          <span style={{ fontSize: 14, color: 'rgba(255,255,255,0.2)' }}>→</span>
+                          <HeroPortrait hero={hero} size={32} selected />
+                          <span style={{ fontSize: 11, color: '#60a5fa' }}>{hero.name}</span>
+                        </div>
+                      )}
+                      {r.status === 'pending' && (
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button onClick={() => handleApprove(r, comp)} style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ade80', borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Approve</button>
+                          <button onClick={() => handleDismiss(r)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)', borderRadius: 7, padding: '5px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Dismiss</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <button onClick={() => loadReviews(comp.id)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.25)', fontSize: 11, cursor: 'pointer', fontFamily: FONT, padding: '4px 0' }}>↺ Refresh</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Draft Dashboard (captain + players) ──────────────────────────────────────
+function DraftDashboard({ roster, responses, playerName, isCaptain }) {
+  const [draft, setDraft] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [pickingSlot, setPickingSlot] = useState(null);
+  const [search, setSearch] = useState('');
+  const intervalRef = useRef(null);
+
+  const poll = async () => {
+    const d = await loadDraft();
+    setDraft(d);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    poll();
+    intervalRef.current = setInterval(poll, 2000);
+    return () => clearInterval(intervalRef.current);
+  }, []);
+
+  const startDraft = async (mode) => {
+    const state = {
+      active: true, mode, startedAt: Date.now(),
+      slots: Array(6).fill(null).map((_, i) => ({ playerName: roster[i] || null, hero: null })),
+    };
+    await saveDraft(state);
+    setDraft(state);
+  };
+
+  const updateSlotHero = async (slotIdx, hero) => {
+    if (!draft) return;
+    const updated = { ...draft, slots: draft.slots.map((s, i) => i === slotIdx ? { ...s, hero } : s) };
+    await saveDraft(updated);
+    setDraft(updated);
+    setPickingSlot(null);
+    setSearch('');
+  };
+
+  const updateSlotPlayer = async (slotIdx, pName) => {
+    if (!draft) return;
+    const updated = { ...draft, slots: draft.slots.map((s, i) => i === slotIdx ? { ...s, playerName: pName } : s) };
+    await saveDraft(updated);
+    setDraft(updated);
+  };
+
+  const toggleMode = async () => {
+    if (!draft) return;
+    const updated = { ...draft, mode: draft.mode === 'captain' ? 'team' : 'captain' };
+    await saveDraft(updated);
+    setDraft(updated);
+  };
+
+  const endSession = async () => {
+    await clearDraft();
+    setDraft(null);
+  };
+
+  const mySlotIdx = draft ? draft.slots.findIndex(s => s.playerName === playerName) : -1;
+  const canPickSlot = (slotIdx) => {
+    if (!draft || !draft.active) return false;
+    if (isCaptain) return true;
+    if (draft.mode === 'team' && mySlotIdx === slotIdx) return true;
+    return false;
+  };
+
+  // Pool: use submitted heroes if team mode, full roster if captain mode
+  const heroPool = draft?.mode === 'team' && !isCaptain
+    ? (responses.find(r => r.name === playerName)?.heroes || HEROES)
+    : HEROES;
+
+  const filtered = heroPool.filter(h => h.name.toLowerCase().includes(search.toLowerCase()));
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.2)', fontFamily: FONT }}>Loading…</div>;
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Session header */}
+      <div style={{ ...glass({ borderRadius: 14, padding: '14px 16px', marginBottom: 12, flexShrink: 0 }) }}>
+        {draft?.active ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 8px #4ade80' }} />
+                <span style={{ fontSize: 14, fontWeight: 600, color: '#fff', fontFamily: FONT }}>Draft Active</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>{draft.slots.filter(s => s.hero).length}/6 picks made</div>
+            </div>
+            {isCaptain && (
+              <>
+                <button onClick={toggleMode} style={{ ...glass({ borderRadius: 8, padding: '6px 12px' }), color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                  {draft.mode === 'captain' ? '🎯 Captain Pick' : '👥 Team Pick'}
+                </button>
+                <button onClick={endSession} style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', color: '#f87171', borderRadius: 8, padding: '6px 12px', fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>End</button>
+              </>
+            )}
+          </div>
+        ) : isCaptain ? (
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff', marginBottom: 10, fontFamily: FONT }}>Start a Draft Session</div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => startDraft('captain')} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                🎯 Captain Pick<div style={{ fontSize: 10, fontWeight: 400, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>You pick all heroes</div>
+              </button>
+              <button onClick={() => startDraft('team')} style={{ flex: 1, background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', borderRadius: 10, padding: '10px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
+                👥 Team Pick<div style={{ fontSize: 10, fontWeight: 400, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>Each player picks</div>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '8px 0', color: 'rgba(255,255,255,0.3)', fontSize: 13, fontFamily: FONT }}>Waiting for captain to start a draft…</div>
+        )}
+      </div>
+
+      {/* Draft board */}
+      {draft?.active && (
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+            {draft.slots.map((slot, si) => {
+              const canPick = canPickSlot(si);
+              const isMySlot = mySlotIdx === si;
+              const r = slot.hero ? ROLES[slot.hero.role] : null;
+              return (
+                <div key={si} onClick={() => canPick && setPickingSlot(si)}
+                  style={{ ...glass({ borderRadius: 14, padding: '12px 10px', cursor: canPick ? 'pointer' : 'default', border: '1px solid ' + (isMySlot && !isCaptain ? 'rgba(96,165,250,0.3)' : 'rgba(255,255,255,0.07)'), background: isMySlot && !isCaptain ? 'rgba(96,165,250,0.05)' : 'rgba(255,255,255,0.03)' }), textAlign: 'center', transition: 'all .12s' }}
+                  onMouseEnter={e => { if (canPick) e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = isMySlot && !isCaptain ? 'rgba(96,165,250,0.05)' : 'rgba(255,255,255,0.03)'; }}>
+                  {/* Player name */}
+                  {isCaptain ? (
+                    <select value={slot.playerName || ''} onChange={e => { e.stopPropagation(); updateSlotPlayer(si, e.target.value || null); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '4px 6px', color: slot.playerName ? '#fff' : 'rgba(255,255,255,0.3)', fontSize: 10, fontFamily: FONT, marginBottom: 8, outline: 'none', cursor: 'pointer' }}>
+                      <option value="">Slot {si + 1}</option>
+                      {roster.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  ) : (
+                    <div style={{ fontSize: 10, fontWeight: 600, color: isMySlot ? '#60a5fa' : 'rgba(255,255,255,0.3)', marginBottom: 8, letterSpacing: '0.05em' }}>{slot.playerName || 'Slot ' + (si + 1)}</div>
+                  )}
+                  {/* Hero */}
+                  {slot.hero ? (
+                    <>
+                      <HeroPortrait hero={slot.hero} size={52} selected />
+                      <div style={{ fontSize: 8, fontWeight: 700, color: r.color, marginTop: 5, letterSpacing: '0.04em' }}>{slot.hero.name.toUpperCase()}</div>
+                    </>
+                  ) : (
+                    <div style={{ height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', color: canPick ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)', fontSize: 22, border: '1.5px dashed rgba(255,255,255,0.1)', borderRadius: 10 }}>
+                      {canPick ? '+' : '—'}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Hero picker for draft slot */}
+      {pickingSlot !== null && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end' }} onClick={() => setPickingSlot(null)}>
+          <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: 'rgba(10,10,14,0.97)', backdropFilter: 'blur(40px)', borderRadius: '20px 20px 0 0', border: '1px solid rgba(255,255,255,0.08)', padding: 20, maxHeight: '65vh', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.35)', marginBottom: 10, letterSpacing: '0.08em', textTransform: 'uppercase', fontFamily: FONT }}>Pick hero for slot {pickingSlot + 1}</div>
+            <input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…"
+              style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '9px 14px', color: '#fff', fontSize: 14, fontFamily: FONT, outline: 'none', marginBottom: 10 }} />
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {filtered.map(hero => (
+                <button key={hero.name} onClick={() => updateSlotHero(pickingSlot, hero)}
+                  style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '8px 4px', cursor: 'pointer', fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <HeroPortrait hero={hero} size={46} />
+                  <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.4)', fontWeight: 600, textAlign: 'center' }}>{hero.name.toUpperCase()}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Calendar Dashboard ────────────────────────────────────────────────────────
+function CalendarDashboard() {
+  const [avail, setAvail] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [hoveredDay, setHoveredDay] = useState(null);
+  const days = generateDays(35);
+
+  useEffect(() => {
+    loadAllAvailability().then(d => { setAvail(d); setLoading(false); });
+  }, []);
+
+  const reload = () => loadAllAvailability().then(setAvail);
+
+  // Build map: date → array of player names
+  const dayMap = {};
+  avail.forEach(r => {
+    (r.available_dates || []).forEach(d => {
+      if (!dayMap[d]) dayMap[d] = [];
+      dayMap[d].push(r.player_name);
+    });
+  });
+
+  const maxCount = Math.max(1, ...Object.values(dayMap).map(v => v.length));
+  const getIntensity = (count) => Math.min(count / maxCount, 1);
+
+  // Group into weeks
+  const weeks = [];
+  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+
+  // Activity feed
+  const activityFeed = avail.slice(0, 12).map(r => ({
+    player: r.player_name,
+    count: (r.available_dates || []).length,
+    time: r.updated_at,
+  }));
+
+  if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.2)', fontFamily: FONT }}>Loading…</div>;
+
+  return (
+    <div style={{ display: 'flex', gap: 14, height: '100%', overflow: 'hidden' }}>
+      {/* Calendar */}
+      <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: FONT }}>Team Availability</div>
+            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: FONT }}>Central Time · Eastern +1 · Pacific −2</div>
+          </div>
+          <button onClick={reload} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.4)', borderRadius: 8, padding: '5px 10px', fontSize: 11, cursor: 'pointer', fontFamily: FONT }}>↺</button>
+        </div>
+        {/* Day labels */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+          {DAY_LABELS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.2)', padding: '4px 0', fontFamily: FONT }}>{d}</div>)}
+        </div>
+        {weeks.map((week, wi) => (
+          <div key={wi} style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, marginBottom: 4 }}>
+            {week.map(day => {
+              const players = dayMap[day] || [];
+              const count = players.length;
+              const intensity = getIntensity(count);
+              const isToday = day === new Date().toISOString().split('T')[0];
+              const { date, month } = formatDay(day);
+              const isHovered = hoveredDay === day;
+              return (
+                <div key={day} onMouseEnter={() => setHoveredDay(day)} onMouseLeave={() => setHoveredDay(null)}
+                  style={{ position: 'relative', borderRadius: 10, padding: '8px 4px', textAlign: 'center', cursor: count > 0 ? 'pointer' : 'default', transition: 'all .12s',
+                    background: count > 0 ? `rgba(74,222,128,${0.04 + intensity * 0.18})` : 'rgba(255,255,255,0.02)',
+                    border: isToday ? '1px solid rgba(255,255,255,0.25)' : count > 0 ? `1px solid rgba(74,222,128,${0.15 + intensity * 0.3})` : '1px solid rgba(255,255,255,0.04)',
+                  }}>
+                  {wi === 0 && <div style={{ fontSize: 7, color: 'rgba(255,255,255,0.2)', marginBottom: 1, fontFamily: FONT }}>{month}</div>}
+                  <div style={{ fontSize: 14, fontWeight: 600, color: count > 0 ? `rgba(74,222,128,${0.5 + intensity * 0.5})` : isToday ? '#fff' : 'rgba(255,255,255,0.3)', fontFamily: FONT }}>{date}</div>
+                  {count > 0 && <div style={{ fontSize: 10, fontWeight: 700, color: `rgba(74,222,128,${0.5 + intensity * 0.5})`, marginTop: 2, fontFamily: FONT }}>{count}</div>}
+                  {/* Tooltip */}
+                  {isHovered && count > 0 && (
+                    <div style={{ position: 'absolute', bottom: 'calc(100% + 6px)', left: '50%', transform: 'translateX(-50%)', background: 'rgba(10,10,16,0.96)', backdropFilter: 'blur(20px)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '8px 10px', zIndex: 50, whiteSpace: 'nowrap', pointerEvents: 'none' }}>
+                      {players.map(p => <div key={p} style={{ fontSize: 11, color: '#fff', fontWeight: 500, fontFamily: FONT }}>{p}</div>)}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 16, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          {[0, 1, 2, 3, 4].map(n => (
+            <div key={n} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: 'rgba(255,255,255,0.3)', fontFamily: FONT }}>
+              <div style={{ width: 14, height: 14, borderRadius: 4, background: n === 0 ? 'rgba(255,255,255,0.04)' : `rgba(74,222,128,${0.1 + n * 0.08})`, border: `1px solid ${n === 0 ? 'rgba(255,255,255,0.06)' : `rgba(74,222,128,${0.2 + n * 0.12})`}` }} />
+              {n === 0 ? '0' : n === 4 ? '4+' : n}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Activity Feed */}
+      <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, fontFamily: FONT }}>Recent Activity</div>
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {activityFeed.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', textAlign: 'center', padding: '20px 0', fontFamily: FONT }}>No activity yet</div>
+          ) : activityFeed.map((a, i) => (
+            <div key={i} style={{ ...glass({ borderRadius: 10, padding: '10px 12px' }) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
+                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{a.player[0].toUpperCase()}</div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', fontFamily: FONT }}>{a.player}</span>
+              </div>
+              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: FONT }}>
+                {a.count > 0 ? `Marked ${a.count} day${a.count !== 1 ? 's' : ''} available` : 'Cleared availability'}
+              </div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 3, fontFamily: FONT }}>{relativeTime(a.time)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
