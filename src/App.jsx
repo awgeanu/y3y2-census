@@ -1121,21 +1121,6 @@ function PlayerCompReview({ playerName, onBack }) {
 
   const suggestHeroes = HEROES.filter(h => h.name.toLowerCase().includes(suggestSearch.toLowerCase()));
 
-  }
-
-  if (step === 'availability') return <PlayerAvailability playerName={name} onBack={() => setStep('portal')} />;
-  if (step === 'draft_player') return (
-    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <button onClick={() => setStep('portal')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>‹</button>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Live Draft</div>
-      </div>
-      <div style={{ flex: 1, overflow: 'hidden', padding: 16 }}>
-        <DraftDashboard roster={[]} responses={[]} playerName={name} isCaptain={false} />
-      </div>
-    </div>
-  );
-
   return (
     <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
