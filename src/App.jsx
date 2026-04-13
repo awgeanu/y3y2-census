@@ -3,7 +3,6 @@ import { loadStore, saveStore, loadCompReviews, saveCompReview, updateReviewStat
 import { ICONS } from "./icons.js";
 
 const FONT = "'SF Pro Display', 'SF Pro Text', -apple-system, 'Helvetica Neue', sans-serif";
-const STORE_KEY = "rivals-census-y3y2-v1";
 
 const ROLES = {
   Vanguard:   { color: "#60a5fa", bg: "rgba(96,165,250,0.08)",  glow: "rgba(96,165,250,0.25)",  icon: "🛡️", label: "VANGUARD"   },
