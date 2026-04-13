@@ -174,7 +174,7 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
                 <div style={{ flex: 1, height: 1, background: "linear-gradient(90deg," + ROLES[role].color + "33, transparent)" }} />
               </div>
             )}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(86px, 1fr))", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))", gap: 6 }}>
               {gh.map(hero => {
                 const sel = hero.name === "Deadpool"
                   ? !!selected.find(h => h.name === "Deadpool" && h.role === hero.role)
@@ -454,7 +454,7 @@ function FormView({ onCaptainAccess }) {
         <button onClick={() => setStep("name")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: 18, cursor: "pointer", padding: "0 4px 0 0", lineHeight: 1, fontFamily: FONT }} title="Back">‹</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.05em" }}>Picking for</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", lineHeight: 1.1, letterSpacing: "-0.01em" }}>{name}</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", lineHeight: 1.1, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "30vw" }}>{name}</div>
         </div>
         <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}><span style={{ color: "#60a5fa", fontWeight: 700 }}>{selected.length}</span> selected</div>
         <button onClick={submit} disabled={selected.length === 0 || saving}
@@ -797,18 +797,20 @@ function Dashboard({ onLock }) {
           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.06em" }}>CAPTAIN DASHBOARD</div>
         </div>
         <div style={{ display: "flex", gap: 4 }}>
-          {[["responses","Responses"],["builder","Comp Builder"],["reviews","Reviews"],["draft","Draft"],["calendar","Calendar"],["roster","Roster"]].map(([t, label]) => (
-            <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s", whiteSpace: "nowrap" }}>
-              {label}
-            </button>
-          ))}
+          <div style={{ display: "flex", gap: 4, overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", msOverflowStyle: "none", paddingBottom: 2 }}>
+            {[["responses","Responses"],["builder","Comps"],["reviews","Reviews"],["draft","Draft"],["calendar","Calendar"],["roster","Roster"]].map(([t, label]) => (
+              <button key={t} onClick={() => setTab(t)} style={{ background: tab === t ? "rgba(255,255,255,0.1)" : "transparent", border: "1px solid " + (tab === t ? "rgba(255,255,255,0.15)" : "transparent"), color: tab === t ? "#fff" : "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 12px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .12s", whiteSpace: "nowrap", flexShrink: 0 }}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <button onClick={shareFormLink} style={{ ...glass({ borderRadius: 8, padding: "6px 12px" }), background: copied ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)", borderColor: copied ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)", color: copied ? "#4ade80" : "rgba(255,255,255,0.5)", fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: FONT, transition: "all .2s" }}>
-          {copied ? "✓ Copied!" : "🔗 Share Form"}
+        <button onClick={shareFormLink} style={{ background: copied ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.05)", border: "1px solid " + (copied ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.08)"), color: copied ? "#4ade80" : "rgba(255,255,255,0.5)", borderRadius: 8, padding: "6px 10px", fontSize: 13, cursor: "pointer", fontFamily: FONT, transition: "all .2s", flexShrink: 0 }} title="Share Form">
+          {copied ? "✓" : "🔗"}
         </button>
-        <button onClick={load} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: FONT }}>↺</button>
-        {responses.length > 0 && <button onClick={clearAll} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: FONT }}>Clear</button>}
-        <button onClick={onLock} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.3)", borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer", fontFamily: FONT }}>🔒</button>
+        <button onClick={load} style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)", borderRadius: 8, padding: "6px 10px", fontSize: 13, cursor: "pointer", fontFamily: FONT, flexShrink: 0 }} title="Refresh">↺</button>
+        {responses.length > 0 && <button onClick={clearAll} style={{ background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", color: "#f87171", borderRadius: 8, padding: "6px 10px", fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: FONT, flexShrink: 0 }}>Clear</button>}
+        <button onClick={onLock} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)", color: "rgba(255,255,255,0.3)", borderRadius: 8, padding: "6px 10px", fontSize: 13, cursor: "pointer", fontFamily: FONT, flexShrink: 0 }} title="Lock">🔒</button>
       </div>
 
       <div style={{ flex: 1, minHeight: 0, overflow: "hidden", padding: "16px 20px" }}>
@@ -966,10 +968,10 @@ function PlayerPortalWrapper({ name, submittedInSession, submittedNames, draftAc
 function PlayerPortal({ name, submittedHeroes, hasAvailability, draftActive, onHeroes, onReview, onAvailability, onDraft, onBack }) {
   const options = [
     { key: 'heroes', icon: '⚔️', label: 'Hero Pool', desc: submittedHeroes > 0 ? submittedHeroes + ' heroes submitted' : 'Not submitted yet', done: submittedHeroes > 0, action: onHeroes },
-    { key: 'review', icon: '📋', label: 'Review Comps', desc: 'View captain comps & leave feedback', done: false, action: onReview },
-    { key: 'availability', icon: '📅', label: 'Availability', desc: hasAvailability ? 'Schedule updated' : 'Mark your available days', done: hasAvailability, action: onAvailability },
+    { key: 'review', icon: '📋', label: 'Review Comps', desc: 'View & comment on captain comps', done: false, action: onReview },
+    { key: 'draft', icon: '🎯', label: draftActive ? 'Live Draft' : 'Draft Board', desc: draftActive ? 'Draft is active — join now!' : 'View the current draft', done: false, action: onDraft, live: draftActive },
+    { key: 'availability', icon: '📅', label: 'Availability', desc: hasAvailability ? 'Schedule updated ✓' : 'Mark your available days', done: hasAvailability, action: onAvailability },
   ];
-  if (draftActive) options.push({ key: 'draft', icon: '🎯', label: 'Live Draft', desc: 'Draft is active — join now', done: false, action: onDraft, live: true });
 
   return (
     <div style={{ minHeight: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 28,
@@ -1392,8 +1394,10 @@ function DraftDashboard({ roster, responses, playerName, isCaptain }) {
   const [pickingSlot, setPickingSlot] = useState(null);
   const [search, setSearch] = useState('');
   const intervalRef = useRef(null);
+  const savingRef = useRef(false);
 
   const poll = async () => {
+    if (savingRef.current) return; // don't overwrite during save
     const d = await loadDraft();
     setDraft(d);
     setLoading(false);
@@ -1401,45 +1405,56 @@ function DraftDashboard({ roster, responses, playerName, isCaptain }) {
 
   useEffect(() => {
     poll();
-    intervalRef.current = setInterval(poll, 2000);
+    intervalRef.current = setInterval(poll, 3000);
     return () => clearInterval(intervalRef.current);
   }, []);
 
   const startDraft = async (mode) => {
+    savingRef.current = true;
     const state = {
       active: true, mode, startedAt: Date.now(),
       slots: Array(6).fill(null).map((_, i) => ({ playerName: roster[i] || null, hero: null })),
     };
+    setDraft(state); // set local state immediately
     await saveDraft(state);
-    setDraft(state);
+    await new Promise(r => setTimeout(r, 500)); // let Supabase settle
+    savingRef.current = false;
   };
 
   const updateSlotHero = async (slotIdx, hero) => {
     if (!draft) return;
+    savingRef.current = true;
     const updated = { ...draft, slots: draft.slots.map((s, i) => i === slotIdx ? { ...s, hero } : s) };
-    await saveDraft(updated);
     setDraft(updated);
+    await saveDraft(updated);
+    savingRef.current = false;
     setPickingSlot(null);
     setSearch('');
   };
 
   const updateSlotPlayer = async (slotIdx, pName) => {
     if (!draft) return;
+    savingRef.current = true;
     const updated = { ...draft, slots: draft.slots.map((s, i) => i === slotIdx ? { ...s, playerName: pName } : s) };
-    await saveDraft(updated);
     setDraft(updated);
+    await saveDraft(updated);
+    savingRef.current = false;
   };
 
   const toggleMode = async () => {
     if (!draft) return;
+    savingRef.current = true;
     const updated = { ...draft, mode: draft.mode === 'captain' ? 'team' : 'captain' };
-    await saveDraft(updated);
     setDraft(updated);
+    await saveDraft(updated);
+    savingRef.current = false;
   };
 
   const endSession = async () => {
+    savingRef.current = true;
     await clearDraft();
     setDraft(null);
+    savingRef.current = false;
   };
 
   const mySlotIdx = draft ? draft.slots.findIndex(s => s.playerName === playerName) : -1;
@@ -1501,7 +1516,7 @@ function DraftDashboard({ roster, responses, playerName, isCaptain }) {
       {/* Draft board */}
       {draft?.active && (
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 8, marginBottom: 12 }}>
             {draft.slots.map((slot, si) => {
               const canPick = canPickSlot(si);
               const isMySlot = mySlotIdx === si;
@@ -1602,9 +1617,9 @@ function CalendarDashboard() {
   if (loading) return <div style={{ textAlign: 'center', padding: 60, color: 'rgba(255,255,255,0.2)', fontFamily: FONT }}>Loading…</div>;
 
   return (
-    <div style={{ display: 'flex', gap: 14, height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', overflowY: 'auto' }}>
       {/* Calendar */}
-      <div style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700, color: '#fff', fontFamily: FONT }}>Team Availability</div>
@@ -1657,9 +1672,9 @@ function CalendarDashboard() {
       </div>
 
       {/* Activity Feed */}
-      <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column', paddingBottom: 20 }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 10, fontFamily: FONT }}>Recent Activity</div>
-        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {activityFeed.length === 0 ? (
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.15)', textAlign: 'center', padding: '20px 0', fontFamily: FONT }}>No activity yet</div>
           ) : activityFeed.map((a, i) => (
@@ -1694,10 +1709,13 @@ export default function App() {
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         html, body { height: 100%; background: #000; -webkit-font-smoothing: antialiased; }
-        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar { width: 4px; height: 0px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
         input::placeholder { color: rgba(255,255,255,0.25); }
+        select { -webkit-appearance: none; appearance: none; }
+        button { -webkit-tap-highlight-color: transparent; }
+        * { -webkit-tap-highlight-color: transparent; }
       `}</style>
       {screen === "form"                           && <FormView onCaptainAccess={handleCaptainAccess} />}
       {(screen === "setup" || screen === "unlock") && <CaptainGate onEnter={() => setScreen("dashboard")} onCancel={() => setScreen("form")} />}
