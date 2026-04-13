@@ -67,15 +67,6 @@ const HEROES = [
   { name: "Deadpool",            role: "Multi-Role", img: ICONS["Deadpool"]            },
 ];
 
-// ── Storage ───────────────────────────────────────────────────────────────────
-const EMPTY = { captainCode: null, responses: [], comps: [] };
-async function loadStore() {
-  try { const r = await window.storage.get(STORE_KEY, true); if (r?.value) return { ...EMPTY, ...JSON.parse(r.value) }; } catch (_) {}
-  return { ...EMPTY };
-}
-async function saveStore(data) {
-  try { const r = await window.storage.set(STORE_KEY, JSON.stringify(data), true); return !!r; } catch (_) { return false; }
-}
 
 // ── Glass card style helper ───────────────────────────────────────────────────
 const glass = (extra = {}) => ({
