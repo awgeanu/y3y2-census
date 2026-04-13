@@ -239,13 +239,17 @@ function ShareButton() {
 }
 
 // ── Player Dropdown ───────────────────────────────────────────────────────────
-function PlayerDropdown({ roster, submittedNames, onSelect }) {
+function PlayerDropdown({ roster, submittedNames, onSelect, onRedo }) {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState("");
   const availableCount = roster.filter(p => !submittedNames.includes(p.toLowerCase())).length;
   const handleSelect = (player) => {
     if (submittedNames.includes(player.toLowerCase())) return;
     setSelected(player); setOpen(false); onSelect(player);
+  };
+  const handleRedo = (player) => {
+    setOpen(false);
+    onRedo(player);
   };
   return (
     <div style={{ position: "relative" }}>
@@ -275,20 +279,36 @@ function PlayerDropdown({ roster, submittedNames, onSelect }) {
             {roster.map((player, i) => {
               const done = submittedNames.includes(player.toLowerCase());
               return (
-                <div key={player} onClick={() => handleSelect(player)} style={{
+                <div key={player} style={{
                   padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between",
                   borderBottom: i < roster.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                  cursor: done ? "default" : "pointer", opacity: done ? 0.45 : 1,
-                }}
-                onMouseEnter={e => { if (!done) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: done ? "rgba(74,222,128,0.15)" : "linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: done ? "#4ade80" : "#fff", flexShrink: 0 }}>
-                      {done ? "v" : player[0].toUpperCase()}
+                }}>
+                  {/* Left: avatar + name */}
+                  <div
+                    onClick={() => !done && handleSelect(player)}
+                    style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, cursor: done ? "default" : "pointer" }}
+                    onMouseEnter={e => { if (!done) e.currentTarget.closest("div[style]").style.background = "rgba(255,255,255,0.06)"; }}
+                    onMouseLeave={e => { e.currentTarget.closest("div[style]").style.background = "transparent"; }}
+                  >
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: done ? "rgba(74,222,128,0.1)" : "linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: done ? "#4ade80" : "#fff", flexShrink: 0 }}>
+                      {done ? "🔒" : player[0].toUpperCase()}
                     </div>
-                    <span style={{ fontSize: 15, fontWeight: 500, color: done ? "rgba(255,255,255,0.4)" : "#fff", fontFamily: FONT }}>{player}</span>
+                    <span style={{ fontSize: 15, fontWeight: 500, color: done ? "rgba(255,255,255,0.3)" : "#fff", fontFamily: FONT, textDecoration: done ? "none" : "none" }}>{player}</span>
+                    {done && <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500, fontFamily: FONT }}>✓</span>}
                   </div>
-                  {done ? <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500, fontFamily: FONT }}>submitted</span> : <span style={{ fontSize: 16, color: "rgba(255,255,255,0.2)" }}>{">"}</span>}
+                  {/* Right: redo button if done, chevron if not */}
+                  {done ? (
+                    <button
+                      onClick={() => handleRedo(player)}
+                      style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.25)", color: "#f87171", borderRadius: 8, padding: "5px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: FONT, flexShrink: 0, transition: "all .15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,68,68,0.22)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(239,68,68,0.12)"; }}
+                    >
+                      Re-do
+                    </button>
+                  ) : (
+                    <span style={{ fontSize: 16, color: "rgba(255,255,255,0.2)", flexShrink: 0 }}>›</span>
+                  )}
                 </div>
               );
             })}
@@ -396,6 +416,15 @@ function FormView({ onCaptainAccess }) {
               roster={roster}
               submittedNames={submittedNames}
               onSelect={player => { setName(player); setStep("pick"); }}
+              onRedo={async player => {
+                // Clear their previous submission then go straight to pick
+                const store = await loadStore();
+                store.responses = store.responses.filter(r => r.name.toLowerCase() !== player.toLowerCase());
+                await saveStore(store);
+                setSubmittedNames(store.responses.map(r => r.name.toLowerCase()));
+                setName(player);
+                setStep("pick");
+              }}
             />
           )}
 
