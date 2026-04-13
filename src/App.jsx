@@ -44,6 +44,7 @@ const HEROES = [
   { name: "Namor",            role: "Duelist",     img: ICONS["Namor"]            },
   { name: "Phoenix",          role: "Duelist",     img: ICONS["Phoenix"]          },
   { name: "Psylocke",         role: "Duelist",     img: ICONS["Psylocke"]         },
+  { name: "Punisher",          role: "Duelist",     img: ICONS["The_Punisher"]     },
   { name: "Scarlet Witch",    role: "Duelist",     img: ICONS["Scarlet_Witch"]    },
   { name: "Spider-Man",       role: "Duelist",     img: ICONS["Spider-Man"]       },
   { name: "Squirrel Girl",    role: "Duelist",     img: ICONS["Squirrel_Girl"]    },
