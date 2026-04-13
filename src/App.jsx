@@ -78,6 +78,31 @@ const glass = (extra = {}) => ({
   ...extra,
 });
 
+// ── Player avatar map ─────────────────────────────────────────────────────────
+const PLAYER_AVATARS = {
+  "zelaya315":   ICONS["Hero_Hulk"],
+  "awgeanu":     ICONS["Spider-Man"],
+  "quique420":   ICONS["Magneto"],
+  "dazzlle":     ICONS["Doctor_Strange"],
+  "carlventus":  ICONS["Moon_Knight"],
+  "lucio91":     ICONS["Jeff_the_Land_Shark"],
+};
+
+function PlayerAvatar({ name, size = 28, style = {} }) {
+  const img = name ? PLAYER_AVATARS[name.toLowerCase()] : null;
+  if (img) return (
+    <div style={{ width: size, height: size, borderRadius: "50%", overflow: "hidden", flexShrink: 0, ...style }}>
+      <img src={img} alt={name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+    </div>
+  );
+  // Fallback: letter avatar
+  return (
+    <div style={{ width: size, height: size, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.4, fontWeight: 700, color: "#fff", flexShrink: 0, ...style }}>
+      {name ? name[0].toUpperCase() : "?"}
+    </div>
+  );
+}
+
 // ── Hero Portrait ─────────────────────────────────────────────────────────────
 function HeroPortrait({ hero, size = 64, selected = false, dimmed = false }) {
   const [failed, setFailed] = useState(false);
@@ -290,9 +315,11 @@ function PlayerDropdown({ roster, submittedNames, onSelect, onRedo }) {
                     onMouseEnter={e => { if (!done) e.currentTarget.closest("div[style]").style.background = "rgba(255,255,255,0.06)"; }}
                     onMouseLeave={e => { e.currentTarget.closest("div[style]").style.background = "transparent"; }}
                   >
-                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: done ? "rgba(74,222,128,0.1)" : "linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: done ? "#4ade80" : "#fff", flexShrink: 0 }}>
-                      {done ? "🔒" : player[0].toUpperCase()}
-                    </div>
+                    {done ? (
+                      <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(74,222,128,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>🔒</div>
+                    ) : (
+                      <PlayerAvatar name={player} size={28} />
+                    )}
                     <span style={{ fontSize: 15, fontWeight: 500, color: done ? "rgba(255,255,255,0.3)" : "#fff", fontFamily: FONT, textDecoration: done ? "none" : "none" }}>{player}</span>
                     {done && <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 500, fontFamily: FONT }}>✓</span>}
                   </div>
@@ -457,7 +484,10 @@ function FormView({ onCaptainAccess }) {
         backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.1), transparent)" }}>
         <div style={{ width: "100%", maxWidth: 420 }}>
           <div style={{ textAlign: "center", marginBottom: 32 }}>
-            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)", marginBottom: 6, textTransform: "uppercase" }}>Y3Y2</div>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)", marginBottom: 10, textTransform: "uppercase" }}>Y3Y2</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 10 }}>
+              <PlayerAvatar name={name} size={64} style={{ border: "2px solid rgba(255,255,255,0.1)" }} />
+            </div>
             <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>Hey, {name} 👋</div>
             <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>What do you want to do?</div>
           </div>
@@ -519,9 +549,7 @@ function FormView({ onCaptainAccess }) {
                 }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
                 onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
-                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.6),rgba(96,165,250,0.6))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                  {player[0].toUpperCase()}
-                </div>
+                <PlayerAvatar name={player} size={32} />
                 <span style={{ fontSize: 16, fontWeight: 500, color: "#fff", flex: 1 }}>{player}</span>
                 <span style={{ fontSize: 18, color: "rgba(255,255,255,0.2)" }}>›</span>
               </button>
@@ -806,7 +834,7 @@ function RosterManager() {
           {roster.map(player => (
             <div key={player} style={{ ...glass({ borderRadius: 10, padding: "12px 14px" }), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.6),rgba(96,165,250,0.6))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0 }}>{player[0].toUpperCase()}</div>
+                <PlayerAvatar name={player} size={22} />
                 <span style={{ fontSize: 14, fontWeight: 500, color: "#fff" }}>{player}</span>
               </div>
               <button onClick={() => removePlayer(player)} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", cursor: "pointer", fontSize: 14, padding: "2px 6px", fontFamily: FONT }}>x</button>
@@ -929,7 +957,7 @@ function Dashboard({ onLock }) {
                   <div key={player.name} style={{ ...glass({ borderRadius: 14, padding: "14px" }) }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.8),rgba(96,165,250,0.8))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff" }}>{player.name[0].toUpperCase()}</div>
+                        <PlayerAvatar name={player.name} size={28} />
                         <div>
                           <div style={{ fontSize: 14, fontWeight: 600, lineHeight: 1, color: "#fff" }}>{player.name}</div>
                           <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>{player.heroes.length} heroes · {new Date(player.submittedAt).toLocaleDateString()}</div>
@@ -1130,9 +1158,7 @@ function CommentThread({ comments, currentPlayer, compId, onRefresh }) {
             {/* Top-level comment */}
             <div style={{ ...glass({ borderRadius: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }) }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
-                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                  {c.player_name[0].toUpperCase()}
-                </div>
+                <PlayerAvatar name={c.player_name} size={22} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', flex: 1 }}>{c.player_name}</span>
                 <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{relativeTime(c.created_at)}</span>
               </div>
@@ -1171,9 +1197,7 @@ function CommentThread({ comments, currentPlayer, compId, onRefresh }) {
                   return (
                     <div key={r.id} style={{ ...glass({ borderRadius: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderLeft: '2px solid rgba(96,165,250,0.2)' }) }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(96,165,250,0.4),rgba(74,222,128,0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                          {r.player_name[0].toUpperCase()}
-                        </div>
+                        <PlayerAvatar name={r.player_name} size={18} />
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', flex: 1 }}>{r.player_name}</span>
                         <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)' }}>{relativeTime(r.created_at)}</span>
                         {isOwnReply && (
@@ -1535,9 +1559,7 @@ function PlayerAvailability({ playerName, onBack }) {
             const nextFormatted = nextDate ? (() => { const d = new Date(nextDate + 'T12:00:00'); return MONTH_LABELS[d.getMonth()] + ' ' + d.getDate(); })() : null;
             return (
               <div key={i} style={{ ...glass({ borderRadius: 10, padding: '10px 14px', marginBottom: 6 }), display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                  {a.player_name[0].toUpperCase()}
-                </div>
+                <PlayerAvatar name={a.player_name} size={26} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{a.player_name}</div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 1 }}>
@@ -1626,7 +1648,7 @@ function ReviewsDashboard({ comps, onRefreshComps }) {
                     <div key={r.id} style={{ ...glass({ borderRadius: 10, padding: '12px 14px', marginBottom: 8, background: r.status === 'pending' ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)', opacity: r.status !== 'pending' ? 0.5 : 1 }) }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff' }}>{r.player_name[0].toUpperCase()}</div>
+                          <PlayerAvatar name={r.player_name} size={22} />
                           <span style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>{r.player_name}</span>
                           <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{relativeTime(r.created_at)}</span>
                         </div>
@@ -1982,7 +2004,7 @@ function CalendarDashboard() {
           ) : activityFeed.map((a, i) => (
             <div key={i} style={{ ...glass({ borderRadius: 10, padding: '10px 12px' }) }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4 }}>
-                <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{a.player[0].toUpperCase()}</div>
+                <PlayerAvatar name={a.player} size={20} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', fontFamily: FONT }}>{a.player}</span>
               </div>
               <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)', fontFamily: FONT }}>
