@@ -12,15 +12,25 @@ const EMPTY = { captainCode: null, responses: [], comps: [], roster: [] }
 export async function loadStore() {
   try {
     const { data, error } = await supabase.from('census_data').select('value').eq('key', STORE_KEY).single()
+    console.log('[loadStore] key:', STORE_KEY, '| error:', JSON.stringify(error), '| hasData:', !!data)
     if (error || !data) return { ...EMPTY }
-    return { ...EMPTY, ...JSON.parse(data.value) }
-  } catch (_) { return { ...EMPTY } }
+    const parsed = JSON.parse(data.value)
+    console.log('[loadStore] roster:', parsed.roster?.length, '| responses:', parsed.responses?.length)
+    return { ...EMPTY, ...parsed }
+  } catch (e) {
+    console.error('[loadStore] exception:', e)
+    return { ...EMPTY }
+  }
 }
 export async function saveStore(data) {
   try {
     const { error } = await supabase.from('census_data').upsert({ key: STORE_KEY, value: JSON.stringify(data), updated_at: new Date().toISOString() })
+    console.log('[saveStore] error:', JSON.stringify(error))
     return !error
-  } catch (_) { return false }
+  } catch (e) {
+    console.error('[saveStore] exception:', e)
+    return false
+  }
 }
 
 // ── Comp Reviews ──────────────────────────────────────────────────────────────
