@@ -214,6 +214,30 @@ function HeroPicker({ selected, onToggle, maxSelect = null }) {
 }
 
 
+// ── Share Button ─────────────────────────────────────────────────────────────
+function ShareButton() {
+  const [copied, setCopied] = useState(false);
+  const share = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    });
+  };
+  return (
+    <button onClick={share} style={{
+      marginTop: 24,
+      background: copied ? "rgba(74,222,128,0.1)" : "rgba(255,255,255,0.07)",
+      border: "1px solid " + (copied ? "rgba(74,222,128,0.3)" : "rgba(255,255,255,0.1)"),
+      color: copied ? "#4ade80" : "rgba(255,255,255,0.6)",
+      borderRadius: 12, padding: "10px 24px", fontSize: 13, fontWeight: 500,
+      cursor: "pointer", fontFamily: FONT, transition: "all .2s",
+      display: "flex", alignItems: "center", gap: 7, margin: "24px auto 0",
+    }}>
+      {copied ? "✓ Link copied!" : "🔗 Share this form"}
+    </button>
+  );
+}
+
 // ── Player Dropdown ───────────────────────────────────────────────────────────
 function PlayerDropdown({ roster, submittedNames, onSelect }) {
   const [open, setOpen] = useState(false);
@@ -337,10 +361,7 @@ function FormView({ onCaptainAccess }) {
         <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 20 }}>
           {selected.map(h => <HeroPortrait key={h.name} hero={h} size={42} selected />)}
         </div>
-        <button onClick={() => { setStep("name"); setName(""); setSelected([]); setSaveErr(""); }}
-          style={{ marginTop: 24, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.6)", borderRadius: 12, padding: "10px 24px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: FONT }}>
-          Submit another player
-        </button>
+        <ShareButton />
         <div style={{ marginTop: 12 }}>
           <button onClick={() => { setStep("name"); setName(""); setSelected([]); setSaveErr(""); }}
             style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 11, cursor: "pointer", fontFamily: FONT }}>
