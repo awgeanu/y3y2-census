@@ -13,19 +13,14 @@ export async function loadStore() {
   try {
     const { data, error } = await supabase.from('census_data').select('value').eq('key', STORE_KEY).single()
     if (error || !data) return { ...EMPTY }
-    const parsed = JSON.parse(data.value)
-    return { ...EMPTY, ...parsed }
-  } catch (e) {
-    return { ...EMPTY }
-  }
+    return { ...EMPTY, ...JSON.parse(data.value) }
+  } catch (_) { return { ...EMPTY } }
 }
 export async function saveStore(data) {
   try {
     const { error } = await supabase.from('census_data').upsert({ key: STORE_KEY, value: JSON.stringify(data), updated_at: new Date().toISOString() })
     return !error
-  } catch (e) {
-    return false
-  }
+  } catch (_) { return false }
 }
 
 // ── Comp Reviews ──────────────────────────────────────────────────────────────
@@ -55,14 +50,20 @@ export async function savePlayerAvailability(playerName, availableDates) {
   return !error
 }
 
-// ── Draft ─────────────────────────────────────────────────────────────────────
+// ── Draft — state column is jsonb so Supabase returns it already parsed ───────
 export async function loadDraft() {
   const { data, error } = await supabase.from('draft_sessions').select('state').eq('id', DRAFT_KEY).single()
   if (error || !data) return null
-  try { return JSON.parse(data.state) } catch { return null }
+  // jsonb column returns an object; text would need JSON.parse — handle both
+  const s = data.state
+  if (!s) return null
+  try { return typeof s === 'string' ? JSON.parse(s) : s } catch { return null }
 }
 export async function saveDraft(state) {
-  const { error } = await supabase.from('draft_sessions').upsert({ id: DRAFT_KEY, state: JSON.stringify(state), updated_at: new Date().toISOString() })
+  // Pass the object directly — Supabase handles jsonb serialization
+  const { error } = await supabase.from('draft_sessions').upsert({
+    id: DRAFT_KEY, state: state, updated_at: new Date().toISOString()
+  })
   return !error
 }
 export async function clearDraft() {

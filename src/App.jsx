@@ -433,12 +433,33 @@ function FormView({ onCaptainAccess }) {
             />
           )}
 
-          <div style={{ marginTop: 48, textAlign: "center" }}>
+          <div style={{ marginTop: 28 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", marginBottom: 10, textAlign: "center" }}>Browse</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { icon: "📋", label: "Comps", s: "review_public" },
+                { icon: "🎯", label: "Draft", s: "draft_public" },
+                { icon: "📅", label: "Calendar", s: "calendar_public" },
+              ].map(({ icon, label, s }) => (
+                <button key={s} onClick={() => setStep(s)} style={{
+                  flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 12, padding: "12px 8px", cursor: "pointer", fontFamily: FONT,
+                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}>
+                  <span style={{ fontSize: 22 }}>{icon}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.5)" }}>{label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ marginTop: 28, textAlign: "center" }}>
             <button onClick={onCaptainAccess} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.08)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", fontFamily: FONT, textTransform: "uppercase" }}>
               Captain Access
             </button>
           </div>
-          <div style={{ marginTop: 36, textAlign: "center", opacity: 0.7 }}>
+          <div style={{ marginTop: 24, textAlign: "center", opacity: 0.7 }}>
             <img src="https://media1.tenor.com/m/c4r46CfpfR8AAAAd/jeff-jeff-the-land-shark.gif" alt="Jeff the Land Shark"
               style={{ width: 80, height: 80, objectFit: "contain", borderRadius: "50%", display: "inline-block" }} />
             <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
@@ -1046,7 +1067,24 @@ function PlayerCompReview({ playerName, onBack }) {
 
   const suggestHeroes = HEROES.filter(h => h.name.toLowerCase().includes(suggestSearch.toLowerCase()));
 
-  if (step === 'portal') {
+  if (step === 'review_public') return <PlayerCompReview playerName={name || 'guest'} onBack={() => setStep('name')} />;
+  if (step === 'calendar_public') return <PlayerAvailability playerName={name || 'guest'} onBack={() => setStep('name')} />;
+  if (step === 'draft_public') return (
+    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={() => setStep('name')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 22, cursor: 'pointer', fontFamily: FONT, lineHeight: 1, padding: '0 6px 0 0' }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>Draft Board</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{name ? 'Viewing as ' + name : 'Select your name to participate'}</div>
+        </div>
+        {!name && <button onClick={() => setStep('name')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Pick name →</button>}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden', padding: 14 }}>
+        <DraftDashboard roster={[]} responses={[]} playerName={name || ''} isCaptain={false} />
+      </div>
+    </div>
+  );
+    if (step === 'portal') {
     return (
       <PlayerPortalWrapper
         name={name}
@@ -1062,7 +1100,24 @@ function PlayerCompReview({ playerName, onBack }) {
     );
   }
 
-  if (step === 'review') return <PlayerCompReview playerName={name} onBack={() => setStep('portal')} />;
+  if (step === 'review_public') return <PlayerCompReview playerName={name || 'guest'} onBack={() => setStep('name')} />;
+  if (step === 'draft_public') return (
+    <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={() => setStep('name')} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 22, cursor: 'pointer', fontFamily: FONT, lineHeight: 1 }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>Draft Board</div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>Select your name to participate</div>
+        </div>
+        {!name && <button onClick={() => setStep('name')} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)', color: '#fff', borderRadius: 10, padding: '7px 14px', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>Pick name →</button>}
+      </div>
+      <div style={{ flex: 1, overflow: 'hidden', padding: 14 }}>
+        <DraftDashboard roster={[]} responses={[]} playerName={name || ''} isCaptain={false} />
+      </div>
+    </div>
+  );
+  if (step === 'calendar_public') return <PlayerAvailability playerName={name || 'guest'} onBack={() => setStep('name')} />;
+    if (step === 'review') return <PlayerCompReview playerName={name} onBack={() => setStep('portal')} />;
   if (step === 'availability') return <PlayerAvailability playerName={name} onBack={() => setStep('portal')} />;
   if (step === 'draft_player') return (
     <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
