@@ -749,13 +749,20 @@ function Dashboard({ onLock }) {
   const [tab, setTab] = useState("responses"); // "responses" | "builder"
   const [refreshed, setRefreshed] = useState(null);
   const [compsForReview, setCompsForReview] = useState([]);
-  const loadCompsForReview = async () => { const s = await loadStore(); setCompsForReview(s.comps || []); };
+  const loadCompsForReview = async () => { try { const s = await loadStore(); setCompsForReview(s.comps || []); } catch(e) { console.error("loadCompsForReview error:", e); } };
   useEffect(() => { loadCompsForReview(); }, []);
   const [copied, setCopied] = useState(false);
 
   const load = async () => {
     setLoading(true);
-    const s = await loadStore(); setResponses(s.responses || []); setRefreshed(new Date()); setLoading(false);
+    try {
+      const s = await loadStore();
+      setResponses(s.responses || []);
+      setRefreshed(new Date());
+    } catch(e) {
+      console.error("Dashboard load error:", e);
+    }
+    setLoading(false);
   };
   useEffect(() => { load(); }, []);
 
@@ -1043,7 +1050,6 @@ function PlayerCompReview({ playerName, onBack }) {
         name={name}
         submittedInSession={selected.length}
         submittedNames={submittedNames}
-        draftActive={draftActive}
         draftActive={draftActive}
         onHeroes={() => setStep('pick')}
         onReview={() => setStep('review')}
