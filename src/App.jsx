@@ -1768,14 +1768,3 @@ export default function App() {
     </>
   );
 }// ── Form View ─────────────────────────────────────────────────────────────────
-const FUNNY_MESSAGES = [
-  "now stop doomscrolling and go warm up",
-  "don't instalock and then leave. we know who you are",
-  "if you picked 3 duelists we're going to have a talk",
-  "please actually use your ult this time",
-  "we believe in you. mostly.",
-  "don't forget to charge your controller",
-  "yes, we can see your ping",
-];
-
-// Steps: name → portal → pick | comps | draft | calendar → done
