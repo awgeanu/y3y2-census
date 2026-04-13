@@ -331,21 +331,17 @@ const FUNNY_MESSAGES = [
 ];
 
 function FormView({ onCaptainAccess }) {
-  const [step, setStep] = useState("name");
-  const [name, setName] = useState("");
-  const [selected, setSelected] = useState([]);
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState("");
-  const [funny] = useState(() => FUNNY_MESSAGES[Math.floor(Math.random() * FUNNY_MESSAGES.length)]);
-  const [roster, setRoster] = useState([]);
+  // ── State ──────────────────────────────────────────────────────────────────
+  const [step, setStep]           = useState("name");  // name | portal | pick | comps | draft | calendar | done
+  const [name, setName]           = useState("");
+  const [selected, setSelected]   = useState([]);
+  const [saving, setSaving]       = useState(false);
+  const [saveErr, setSaveErr]     = useState("");
+  const [funny]                   = useState(() => FUNNY_MESSAGES[Math.floor(Math.random() * FUNNY_MESSAGES.length)]);
+  const [roster, setRoster]       = useState([]);
   const [loadingRoster, setLoadingRoster] = useState(true);
   const [submittedNames, setSubmittedNames] = useState([]);
   const [draftActive, setDraftActive] = useState(false);
-  const [pendingStep, setPendingStep] = useState(null);
-
-  useEffect(() => {
-    loadDraft().then(d => setDraftActive(!!(d && d.active)));
-  }, []);
 
   useEffect(() => {
     loadStore().then(s => {
@@ -353,143 +349,200 @@ function FormView({ onCaptainAccess }) {
       setSubmittedNames((s.responses || []).map(r => r.name.toLowerCase()));
       setLoadingRoster(false);
     });
+    loadDraft().then(d => setDraftActive(!!(d && d.active)));
   }, []);
+
   const toggle = useCallback(hero => {
     setSelected(s => {
-      // Deadpool is tracked by name+role so he can be in multiple categories
-      const isDeadpool = hero.name === "Deadpool";
-      const key = isDeadpool ? hero.name + "|" + hero.role : hero.name;
-      const existing = s.find(h => isDeadpool ? (h.name === hero.name && h.role === hero.role) : h.name === hero.name);
-      return existing ? s.filter(h => isDeadpool ? !(h.name === hero.name && h.role === hero.role) : h.name !== hero.name) : [...s, hero];
+      const isDP = hero.name === "Deadpool";
+      const exists = s.find(h => isDP ? (h.name === hero.name && h.role === hero.role) : h.name === hero.name);
+      return exists
+        ? s.filter(h => isDP ? !(h.name === hero.name && h.role === hero.role) : h.name !== hero.name)
+        : [...s, hero];
     });
   }, []);
 
   const submit = async () => {
-    if (!name.trim() || selected.length === 0) return;
+    if (!name || selected.length === 0) return;
     setSaving(true); setSaveErr("");
     const store = await loadStore();
-    store.responses = [...store.responses.filter(e => e.name.toLowerCase() !== name.trim().toLowerCase()),
-      { name: name.trim(), heroes: selected, submittedAt: Date.now() }];
+    store.responses = [
+      ...store.responses.filter(e => e.name.toLowerCase() !== name.toLowerCase()),
+      { name, heroes: selected, submittedAt: Date.now() },
+    ];
     const ok = await saveStore(store);
     setSaving(false);
-    if (ok) setStep("done"); else setSaveErr("Storage unavailable — try on desktop at claude.ai.");
+    if (ok) { setSubmittedNames(store.responses.map(r => r.name.toLowerCase())); setStep("done"); }
+    else setSaveErr("Save failed — try again.");
   };
 
+  // ── Step: done ─────────────────────────────────────────────────────────────
   if (step === "done") return (
     <div style={{ minHeight: "100vh", background: "#000", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 24 }}>
       <div style={{ textAlign: "center", maxWidth: 420 }}>
-        <div style={{ fontSize: 64, marginBottom: 16 }}>✅</div>
-        <div style={{ fontSize: 32, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>You're locked in.</div>
-        <div style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", marginTop: 8, fontWeight: 400 }}>
-          {selected.length} heroes submitted for <span style={{ color: "#fff", fontWeight: 600 }}>{name}</span>
+        <div style={{ fontSize: 60, marginBottom: 14 }}>✅</div>
+        <div style={{ fontSize: 30, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff" }}>You're locked in.</div>
+        <div style={{ fontSize: 14, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>
+          {selected.length} heroes for <span style={{ color: "#fff", fontWeight: 600 }}>{name}</span>
         </div>
-        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.25)", marginTop: 6, fontStyle: "italic" }}>{funny}</div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 20 }}>
-          {selected.map(h => <HeroPortrait key={h.name} hero={h} size={42} selected />)}
+        <div style={{ fontSize: 13, color: "rgba(255,255,255,0.22)", marginTop: 6, fontStyle: "italic" }}>{funny}</div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center", marginTop: 18 }}>
+          {selected.map(h => <HeroPortrait key={h.name + h.role} hero={h} size={40} selected />)}
         </div>
         <ShareButton />
-        <div style={{ marginTop: 12 }}>
-          <button onClick={() => { setStep("name"); setName(""); setSelected([]); setSaveErr(""); }}
-            style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 11, cursor: "pointer", fontFamily: FONT }}>
-            ← Back to start
-          </button>
+        <div style={{ marginTop: 14 }}>
+          <button onClick={() => setStep("portal")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.25)", fontSize: 12, cursor: "pointer", fontFamily: FONT }}>← Back to menu</button>
         </div>
       </div>
     </div>
   );
 
-  if (step === "name") {
+  // ── Step: pick ─────────────────────────────────────────────────────────────
+  if (step === "pick") return (
+    <div style={{ height: "100vh", background: "#000", fontFamily: FONT, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <button onClick={() => setStep("portal")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: 22, cursor: "pointer", fontFamily: FONT, lineHeight: 1, padding: "0 4px 0 0" }}>‹</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 500 }}>Picking for</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</div>
+        </div>
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", flexShrink: 0 }}><span style={{ color: "#60a5fa", fontWeight: 700 }}>{selected.length}</span> selected</span>
+        <button onClick={submit} disabled={selected.length === 0 || saving}
+          style={{ background: selected.length > 0 ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.07)", color: selected.length > 0 ? "#000" : "rgba(255,255,255,0.2)", border: "none", borderRadius: 10, padding: "9px 16px", fontSize: 13, fontWeight: 600, cursor: selected.length > 0 ? "pointer" : "default", fontFamily: FONT, flexShrink: 0 }}>
+          {saving ? "Saving…" : "Submit"}
+        </button>
+      </div>
+      {saveErr && <div style={{ padding: "8px 16px", background: "rgba(239,68,68,0.1)", fontSize: 11, color: "#f87171", flexShrink: 0 }}>{saveErr}</div>}
+      <HeroPicker selected={selected} onToggle={toggle} />
+    </div>
+  );
+
+  // ── Step: comps ────────────────────────────────────────────────────────────
+  if (step === "comps") return <PlayerCompReview playerName={name} onBack={() => setStep("portal")} />;
+
+  // ── Step: calendar ─────────────────────────────────────────────────────────
+  if (step === "calendar") return <PlayerAvailability playerName={name} onBack={() => setStep("portal")} />;
+
+  // ── Step: draft ────────────────────────────────────────────────────────────
+  if (step === "draft") return (
+    <div style={{ height: "100vh", background: "#000", fontFamily: FONT, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.85)", backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
+        <button onClick={() => setStep("portal")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: 22, cursor: "pointer", fontFamily: FONT, lineHeight: 1 }}>‹</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", letterSpacing: "-0.01em" }}>Draft Board</div>
+          <div style={{ fontSize: 10, color: "rgba(255,255,255,0.3)" }}>Playing as {name}</div>
+        </div>
+        {draftActive && <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          <div style={{ width: 7, height: 7, borderRadius: "50%", background: "#4ade80", boxShadow: "0 0 6px #4ade80" }} />
+          <span style={{ fontSize: 11, color: "#4ade80", fontWeight: 600 }}>Live</span>
+        </div>}
+      </div>
+      <div style={{ flex: 1, overflow: "hidden", padding: 14 }}>
+        <DraftDashboard roster={roster} responses={[]} playerName={name} isCaptain={false} />
+      </div>
+    </div>
+  );
+
+  // ── Step: portal ───────────────────────────────────────────────────────────
+  if (step === "portal") {
+    const hasSubmitted = submittedNames.includes(name.toLowerCase());
+    const options = [
+      { icon: "⚔️", label: "Hero Pool",   desc: hasSubmitted ? "✓ Pool submitted — update anytime" : "Submit your hero pool", step: "pick",     done: hasSubmitted },
+      { icon: "📋", label: "Review Comps", desc: "View captain comps & give feedback",                                         step: "comps",    done: false },
+      { icon: "🎯", label: draftActive ? "Live Draft 🔴" : "Draft Board", desc: draftActive ? "Draft is active — join now!" : "View the current draft", step: "draft", live: draftActive },
+      { icon: "📅", label: "Availability", desc: "Mark the days you can play",                                                 step: "calendar", done: false },
+    ];
     return (
-      <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 32,
-        backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.13), transparent)" }}>
-        <div style={{ width: "100%", maxWidth: 400 }}>
-          <div style={{ textAlign: "center", marginBottom: 40 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", marginBottom: 10, textTransform: "uppercase" }}>Y3Y2</div>
-            <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>Hero Pool</div>
-            <div style={{ fontSize: 14, color: "rgba(255,255,255,0.35)", marginTop: 10, fontWeight: 400 }}>Who are you?</div>
+      <div style={{ minHeight: "100vh", background: "#000", fontFamily: FONT, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 28,
+        backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.1), transparent)" }}>
+        <div style={{ width: "100%", maxWidth: 420 }}>
+          <div style={{ textAlign: "center", marginBottom: 32 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, letterSpacing: "0.2em", color: "rgba(255,255,255,0.25)", marginBottom: 6, textTransform: "uppercase" }}>Y3Y2</div>
+            <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: "-0.02em", color: "#fff", lineHeight: 1 }}>Hey, {name} 👋</div>
+            <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", marginTop: 6 }}>What do you want to do?</div>
           </div>
-
-          {loadingRoster ? (
-            <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13, padding: "20px 0", fontFamily: FONT }}>Loading…</div>
-          ) : roster.length === 0 ? (
-            <div style={{ ...glass({ borderRadius: 14, padding: "24px" }), textAlign: "center" }}>
-              <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
-              <div style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Roster not set up yet</div>
-              <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 6 }}>Ask your captain to add players in the dashboard</div>
-            </div>
-          ) : (
-            <PlayerDropdown
-              roster={roster}
-              submittedNames={submittedNames}
-              onSelect={player => { setName(player); setStep("pick"); }}
-              onRedo={async player => {
-                // Clear their previous submission then go straight to pick
-                const store = await loadStore();
-                store.responses = store.responses.filter(r => r.name.toLowerCase() !== player.toLowerCase());
-                await saveStore(store);
-                setSubmittedNames(store.responses.map(r => r.name.toLowerCase()));
-                setName(player);
-                setStep("pick");
+          <div style={{ ...glass({ borderRadius: 20, overflow: "hidden", padding: 0 }) }}>
+            {options.map((opt, i) => (
+              <button key={opt.label} onClick={() => setStep(opt.step)} style={{
+                width: "100%", background: opt.live ? "rgba(248,113,113,0.06)" : "transparent",
+                border: "none", borderBottom: i < options.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none",
+                padding: "16px 20px", display: "flex", alignItems: "center", gap: 14,
+                cursor: "pointer", fontFamily: FONT, textAlign: "left", transition: "background .12s",
               }}
-            />
-          )}
-
-          <div style={{ marginTop: 28 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "rgba(255,255,255,0.2)", textTransform: "uppercase", marginBottom: 10, textAlign: "center" }}>Browse</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {[
-                { icon: "📋", label: "Comps", s: "review_public" },
-                { icon: "🎯", label: "Draft", s: "draft_public" },
-                { icon: "📅", label: "Calendar", s: "calendar_public" },
-              ].map(({ icon, label, s }) => (
-                <button key={s} onClick={() => setStep(s)} style={{
-                  flex: 1, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 12, padding: "12px 8px", cursor: "pointer", fontFamily: FONT,
-                  display: "flex", flexDirection: "column", alignItems: "center", gap: 5,
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; }}>
-                  <span style={{ fontSize: 22 }}>{icon}</span>
-                  <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.5)" }}>{label}</span>
-                </button>
-              ))}
-            </div>
+              onMouseEnter={e => { e.currentTarget.style.background = opt.live ? "rgba(248,113,113,0.12)" : "rgba(255,255,255,0.05)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = opt.live ? "rgba(248,113,113,0.06)" : "transparent"; }}>
+                <div style={{ width: 44, height: 44, borderRadius: 12, background: opt.live ? "rgba(248,113,113,0.15)" : "rgba(255,255,255,0.07)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>{opt.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: opt.live ? "#f87171" : "#fff" }}>{opt.label}</div>
+                  <div style={{ fontSize: 12, color: opt.done ? "#4ade80" : "rgba(255,255,255,0.35)", marginTop: 2 }}>{opt.desc}</div>
+                </div>
+                <span style={{ fontSize: 18, color: "rgba(255,255,255,0.2)" }}>›</span>
+              </button>
+            ))}
           </div>
-          <div style={{ marginTop: 28, textAlign: "center" }}>
-            <button onClick={onCaptainAccess} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.08)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", fontFamily: FONT, textTransform: "uppercase" }}>
-              Captain Access
-            </button>
-          </div>
-          <div style={{ marginTop: 24, textAlign: "center", opacity: 0.7 }}>
-            <img src="https://media1.tenor.com/m/c4r46CfpfR8AAAAd/jeff-jeff-the-land-shark.gif" alt="Jeff the Land Shark"
-              style={{ width: 80, height: 80, objectFit: "contain", borderRadius: "50%", display: "inline-block" }} />
-            <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
+          <div style={{ marginTop: 20, textAlign: "center" }}>
+            <button onClick={() => { setName(""); setSelected([]); setStep("name"); }} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.2)", fontSize: 12, cursor: "pointer", fontFamily: FONT }}>← Not you?</button>
           </div>
         </div>
       </div>
     );
   }
 
+  // ── Step: name (default/landing) ───────────────────────────────────────────
   return (
-    <div style={{ height: "100vh", background: "#000", fontFamily: FONT, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(0,0,0,0.8)", backdropFilter: "blur(20px)", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-        <button onClick={() => setStep("name")} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.35)", fontSize: 18, cursor: "pointer", padding: "0 4px 0 0", lineHeight: 1, fontFamily: FONT }} title="Back">‹</button>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.3)", fontWeight: 500, letterSpacing: "0.05em" }}>Picking for</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#fff", lineHeight: 1.1, letterSpacing: "-0.01em", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "30vw" }}>{name}</div>
+    <div style={{ minHeight: "100vh", background: "#000", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: FONT, padding: 28,
+      backgroundImage: "radial-gradient(ellipse 80% 50% at 50% -10%, rgba(255,255,255,0.13), transparent)" }}>
+      <div style={{ width: "100%", maxWidth: 400 }}>
+        <div style={{ textAlign: "center", marginBottom: 36 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", marginBottom: 10, textTransform: "uppercase" }}>Y3Y2</div>
+          <div style={{ fontSize: 46, fontWeight: 700, letterSpacing: "-0.03em", color: "#fff", lineHeight: 1 }}>Hero Pool</div>
+          <div style={{ fontSize: 15, color: "rgba(255,255,255,0.35)", marginTop: 10 }}>Who are you?</div>
         </div>
-        <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)" }}><span style={{ color: "#60a5fa", fontWeight: 700 }}>{selected.length}</span> selected</div>
-        <button onClick={submit} disabled={selected.length === 0 || saving}
-          style={{ background: selected.length > 0 ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.07)", color: selected.length > 0 ? "#000" : "rgba(255,255,255,0.2)", border: "none", borderRadius: 10, padding: "9px 18px", fontSize: 13, fontWeight: 600, cursor: selected.length > 0 ? "pointer" : "default", fontFamily: FONT, transition: "all .15s" }}>
-          {saving ? "Saving…" : "Submit"}
-        </button>
+
+        {loadingRoster ? (
+          <div style={{ textAlign: "center", color: "rgba(255,255,255,0.2)", fontSize: 13, padding: "24px 0" }}>Loading…</div>
+        ) : roster.length === 0 ? (
+          <div style={{ ...glass({ borderRadius: 14, padding: "24px" }), textAlign: "center" }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>⏳</div>
+            <div style={{ fontSize: 15, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>Roster not set up yet</div>
+            <div style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", marginTop: 6 }}>Ask your captain to add players</div>
+          </div>
+        ) : (
+          <div style={{ ...glass({ borderRadius: 16, overflow: "hidden", padding: 0 }) }}>
+            {roster.map((player, i) => (
+              <button key={player} onClick={() => { setName(player); setStep("portal"); }}
+                style={{
+                  width: "100%", background: "transparent", border: "none",
+                  borderBottom: i < roster.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                  padding: "14px 18px", display: "flex", alignItems: "center", gap: 12,
+                  cursor: "pointer", fontFamily: FONT, textAlign: "left", transition: "background .12s",
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg,rgba(248,113,113,0.6),rgba(96,165,250,0.6))", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                  {player[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize: 16, fontWeight: 500, color: "#fff", flex: 1 }}>{player}</span>
+                <span style={{ fontSize: 18, color: "rgba(255,255,255,0.2)" }}>›</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 40, textAlign: "center" }}>
+          <button onClick={onCaptainAccess} style={{ background: "none", border: "none", color: "rgba(255,255,255,0.08)", fontSize: 10, letterSpacing: "0.08em", cursor: "pointer", fontFamily: FONT, textTransform: "uppercase" }}>
+            Captain Access
+          </button>
+        </div>
+        <div style={{ marginTop: 28, textAlign: "center", opacity: 0.7 }}>
+          <img src="https://media1.tenor.com/m/c4r46CfpfR8AAAAd/jeff-jeff-the-land-shark.gif" alt="Jeff"
+            style={{ width: 80, height: 80, objectFit: "contain", borderRadius: "50%", display: "inline-block" }} />
+          <div style={{ fontSize: 9, color: "rgba(255,255,255,0.18)", marginTop: 4, fontStyle: "italic" }}>jeff approves this message</div>
+        </div>
       </div>
-      {saveErr && <div style={{ padding: "8px 16px", background: "rgba(239,68,68,0.1)", borderBottom: "1px solid rgba(239,68,68,0.2)", fontSize: 11, color: "#f87171", fontWeight: 500 }}>{saveErr}</div>}
-      <HeroPicker selected={selected} onToggle={toggle} />
     </div>
   );
 }
-
 // ── Captain Gate ──────────────────────────────────────────────────────────────
 function CaptainGate({ onEnter, onCancel }) {
   const [mode, setMode] = useState("checking");
