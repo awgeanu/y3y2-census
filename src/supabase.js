@@ -28,12 +28,17 @@ export async function loadCompReviews(compId) {
   const { data, error } = await supabase.from('comp_reviews').select('*').eq('comp_id', String(compId)).order('created_at', { ascending: true })
   return error ? [] : data
 }
-export async function saveCompReview({ compId, playerName, comment, slotIndex, suggestedHero }) {
+export async function saveCompReview({ compId, playerName, comment, slotIndex, suggestedHero, replyTo }) {
   const { data, error } = await supabase.from('comp_reviews').insert({
     comp_id: String(compId), player_name: playerName, comment: comment || null,
-    slot_index: slotIndex ?? null, suggested_hero: suggestedHero ? JSON.stringify(suggestedHero) : null, status: 'pending',
+    slot_index: slotIndex ?? null, suggested_hero: suggestedHero ? JSON.stringify(suggestedHero) : null,
+    status: 'pending', reply_to: replyTo || null,
   }).select().single()
   return error ? null : data
+}
+export async function deleteCompReview(id) {
+  const { error } = await supabase.from('comp_reviews').delete().eq('id', id)
+  return !error
 }
 export async function updateReviewStatus(id, status) {
   const { error } = await supabase.from('comp_reviews').update({ status }).eq('id', id)
@@ -46,7 +51,8 @@ export async function loadAllAvailability() {
   return error ? [] : data
 }
 export async function savePlayerAvailability(playerName, availableDates) {
-  const { error } = await supabase.from('availability').upsert({ player_name: playerName, available_dates: availableDates, updated_at: new Date().toISOString() })
+  const { error } = await supabase.from('availability')
+    .upsert({ player_name: playerName, available_dates: availableDates, updated_at: new Date().toISOString() }, { onConflict: 'player_name' })
   return !error
 }
 

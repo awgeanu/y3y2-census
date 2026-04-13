@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { loadStore, saveStore, loadCompReviews, saveCompReview, updateReviewStatus, loadAllAvailability, savePlayerAvailability, loadDraft, saveDraft, clearDraft } from "./supabase.js";
+import { loadStore, saveStore, loadCompReviews, saveCompReview, deleteCompReview, updateReviewStatus, loadAllAvailability, savePlayerAvailability, loadDraft, saveDraft, clearDraft } from "./supabase.js";
 import { ICONS } from "./icons.js";
 
 const FONT = "'SF Pro Display', 'SF Pro Text', -apple-system, 'Helvetica Neue', sans-serif";
@@ -1091,34 +1091,150 @@ function PlayerPortal({ name, submittedHeroes, hasAvailability, draftActive, onH
 }
 
 // ── Player Comp Review ────────────────────────────────────────────────────────
+function CommentThread({ comments, currentPlayer, compId, onRefresh }) {
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [replyText, setReplyText] = useState('');
+  const [posting, setPosting] = useState(false);
+
+  const topLevel = comments.filter(c => !c.reply_to && c.comment);
+  const getReplies = (id) => comments.filter(c => c.reply_to === id);
+
+  const handleReply = async (parentId) => {
+    if (!replyText.trim()) return;
+    setPosting(true);
+    await saveCompReview({ compId, playerName: currentPlayer, comment: replyText.trim(), replyTo: parentId });
+    setReplyText(''); setReplyingTo(null);
+    await onRefresh();
+    setPosting(false);
+  };
+
+  const handleDelete = async (id) => {
+    await deleteCompReview(id);
+    await onRefresh();
+  };
+
+  if (topLevel.length === 0) return (
+    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.2)', textAlign: 'center', padding: '12px 0', fontFamily: FONT }}>
+      No comments yet — be the first
+    </div>
+  );
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {topLevel.map(c => {
+        const replies = getReplies(c.id);
+        const isOwn = c.player_name === currentPlayer;
+        const isReplying = replyingTo === c.id;
+        return (
+          <div key={c.id}>
+            {/* Top-level comment */}
+            <div style={{ ...glass({ borderRadius: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)' }) }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 5 }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(248,113,113,0.5),rgba(96,165,250,0.5))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                  {c.player_name[0].toUpperCase()}
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', flex: 1 }}>{c.player_name}</span>
+                <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)' }}>{relativeTime(c.created_at)}</span>
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5, marginBottom: 6 }}>{c.comment}</div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button onClick={() => { setReplyingTo(isReplying ? null : c.id); setReplyText(''); }}
+                  style={{ background: 'none', border: 'none', color: isReplying ? '#60a5fa' : 'rgba(255,255,255,0.3)', fontSize: 11, cursor: 'pointer', fontFamily: FONT, padding: 0, fontWeight: 500 }}>
+                  {isReplying ? 'Cancel' : '↩ Reply'}
+                </button>
+                {isOwn && (
+                  <button onClick={() => handleDelete(c.id)}
+                    style={{ background: 'none', border: 'none', color: 'rgba(248,113,113,0.5)', fontSize: 11, cursor: 'pointer', fontFamily: FONT, padding: 0 }}>
+                    Delete
+                  </button>
+                )}
+              </div>
+              {/* Reply input */}
+              {isReplying && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <input autoFocus value={replyText} onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleReply(c.id); }}}
+                    placeholder={`Reply to ${c.player_name}…`}
+                    style={{ flex: 1, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '7px 10px', color: '#fff', fontSize: 12, fontFamily: FONT, outline: 'none' }} />
+                  <button onClick={() => handleReply(c.id)} disabled={!replyText.trim() || posting}
+                    style={{ background: replyText.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 8, padding: '7px 12px', color: replyText.trim() ? '#000' : 'rgba(255,255,255,0.2)', fontSize: 12, fontWeight: 600, cursor: replyText.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
+                    Send
+                  </button>
+                </div>
+              )}
+            </div>
+            {/* Replies */}
+            {replies.length > 0 && (
+              <div style={{ marginLeft: 16, marginTop: 4, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {replies.map(r => {
+                  const isOwnReply = r.player_name === currentPlayer;
+                  return (
+                    <div key={r.id} style={{ ...glass({ borderRadius: 10, padding: '8px 12px', background: 'rgba(255,255,255,0.02)', borderLeft: '2px solid rgba(96,165,250,0.2)' }) }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'linear-gradient(135deg,rgba(96,165,250,0.4),rgba(74,222,128,0.4))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                          {r.player_name[0].toUpperCase()}
+                        </div>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#fff', flex: 1 }}>{r.player_name}</span>
+                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.2)' }}>{relativeTime(r.created_at)}</span>
+                        {isOwnReply && (
+                          <button onClick={() => handleDelete(r.id)}
+                            style={{ background: 'none', border: 'none', color: 'rgba(248,113,113,0.4)', fontSize: 10, cursor: 'pointer', fontFamily: FONT, padding: '0 0 0 4px' }}>
+                            ✕
+                          </button>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', lineHeight: 1.4 }}>{r.comment}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PlayerCompReview({ playerName, onBack }) {
   const [comps, setComps] = useState([]);
   const [expandedId, setExpandedId] = useState(null);
-  const [comment, setComment] = useState('');
+  const [compComments, setCompComments] = useState({});
+  const [newComment, setNewComment] = useState('');
   const [suggestSlot, setSuggestSlot] = useState(null);
   const [suggestSearch, setSuggestSearch] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState({});
+  const [suggested, setSuggested] = useState({});
 
   useEffect(() => {
     loadStore().then(s => setComps((s.comps || []).filter(c => c.published)));
   }, []);
 
+  const loadComments = async (compId) => {
+    const data = await loadCompReviews(compId);
+    setCompComments(p => ({ ...p, [compId]: data }));
+  };
+
+  const handleExpand = (compId) => {
+    if (expandedId === compId) { setExpandedId(null); return; }
+    setExpandedId(compId);
+    loadComments(compId);
+  };
+
   const handleComment = async (compId) => {
-    if (!comment.trim()) return;
+    if (!newComment.trim()) return;
     setSubmitting(true);
-    await saveCompReview({ compId, playerName, comment: comment.trim() });
-    setComment('');
-    setSubmitted(p => ({ ...p, [compId + '_comment']: true }));
+    await saveCompReview({ compId, playerName, comment: newComment.trim() });
+    setNewComment('');
+    await loadComments(compId);
     setSubmitting(false);
   };
 
   const handleSuggest = async (compId, slotIndex, hero) => {
     setSubmitting(true);
     await saveCompReview({ compId, playerName, slotIndex, suggestedHero: hero });
-    setSuggestSlot(null);
-    setSuggestSearch('');
-    setSubmitted(p => ({ ...p, [compId + '_' + slotIndex]: true }));
+    setSuggestSlot(null); setSuggestSearch('');
+    setSuggested(p => ({ ...p, [compId + '_' + slotIndex]: true }));
     setSubmitting(false);
   };
 
@@ -1126,13 +1242,14 @@ function PlayerCompReview({ playerName, onBack }) {
 
   return (
     <div style={{ height: '100vh', background: '#000', fontFamily: FONT, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 18, cursor: 'pointer', fontFamily: FONT }}>‹</button>
+      <div style={{ padding: '12px 16px', borderBottom: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.35)', fontSize: 22, cursor: 'pointer', fontFamily: FONT, lineHeight: 1 }}>‹</button>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 16, fontWeight: 700, color: '#fff', letterSpacing: '-0.01em' }}>Review Comps</div>
           <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)' }}>{comps.length} published comp{comps.length !== 1 ? 's' : ''}</div>
         </div>
       </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px' }}>
         {comps.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px 0', color: 'rgba(255,255,255,0.2)' }}>
@@ -1142,16 +1259,19 @@ function PlayerCompReview({ playerName, onBack }) {
           </div>
         ) : comps.map(comp => {
           const isOpen = expandedId === comp.id;
+          const comments = compComments[comp.id] || [];
+          const commentCount = comments.filter(c => c.comment && !c.reply_to).length;
           return (
             <div key={comp.id} style={{ ...glass({ borderRadius: 16, marginBottom: 10, overflow: 'hidden', padding: 0 }) }}>
-              <button onClick={() => setExpandedId(isOpen ? null : comp.id)} style={{
+              {/* Comp header */}
+              <button onClick={() => handleExpand(comp.id)} style={{
                 width: '100%', background: 'transparent', border: 'none', padding: '14px 16px',
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', fontFamily: FONT,
               }}>
                 <div style={{ textAlign: 'left' }}>
                   <div style={{ fontSize: 15, fontWeight: 600, color: '#fff' }}>{comp.name}</div>
                   <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.3)', marginTop: 2 }}>
-                    {comp.slots.filter(Boolean).length}/6 heroes · tap to {isOpen ? 'collapse' : 'review'}
+                    {comp.slots.filter(Boolean).length}/6 heroes{commentCount > 0 ? ` · ${commentCount} comment${commentCount !== 1 ? 's' : ''}` : ''}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1162,22 +1282,22 @@ function PlayerCompReview({ playerName, onBack }) {
 
               {isOpen && (
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px' }}>
-                  {/* 6 slots */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
+                  {/* Hero slots */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 20 }}>
                     {comp.slots.map((slot, si) => {
-                      const hasSuggested = submitted[comp.id + '_' + si];
+                      const hasSuggested = suggested[comp.id + '_' + si];
                       return (
                         <div key={si} style={{ textAlign: 'center' }}>
                           <div style={{ ...glass({ borderRadius: 12, padding: '10px 6px', border: '1px solid rgba(255,255,255,0.07)' }) }}>
                             {slot ? (
                               <>
-                                <HeroPortrait hero={slot} size={48} selected />
+                                <HeroPortrait hero={slot} size={46} selected />
                                 <div style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', marginTop: 4, fontWeight: 600 }}>{slot.name.split(' ').pop().toUpperCase()}</div>
                               </>
                             ) : (
-                              <div style={{ height: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.1)', fontSize: 20 }}>+</div>
+                              <div style={{ height: 46, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.1)', fontSize: 20 }}>+</div>
                             )}
-                            <button onClick={() => { setSuggestSlot({ compId: comp.id, slotIndex: si, current: slot }); setSuggestSearch(''); }}
+                            <button onClick={() => { setSuggestSlot({ compId: comp.id, slotIndex: si }); setSuggestSearch(''); }}
                               style={{ marginTop: 6, width: '100%', background: hasSuggested ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.05)', border: '1px solid ' + (hasSuggested ? 'rgba(74,222,128,0.2)' : 'rgba(255,255,255,0.08)'), color: hasSuggested ? '#4ade80' : 'rgba(255,255,255,0.4)', borderRadius: 6, padding: '4px 0', fontSize: 9, fontWeight: 600, cursor: 'pointer', fontFamily: FONT }}>
                               {hasSuggested ? '✓ sent' : '💬 suggest'}
                             </button>
@@ -1186,21 +1306,32 @@ function PlayerCompReview({ playerName, onBack }) {
                       );
                     })}
                   </div>
-                  {/* Comment */}
-                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 12 }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.25)', marginBottom: 8, textTransform: 'uppercase' }}>Leave a comment</div>
-                    {submitted[comp.id + '_comment'] ? (
-                      <div style={{ fontSize: 13, color: '#4ade80', textAlign: 'center', padding: '8px 0' }}>✓ Comment sent</div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Your thoughts on this comp..."
-                          style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: FONT, outline: 'none' }} />
-                        <button onClick={() => handleComment(comp.id)} disabled={!comment.trim() || submitting}
-                          style={{ background: comment.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '9px 14px', color: comment.trim() ? '#000' : 'rgba(255,255,255,0.2)', fontSize: 13, fontWeight: 600, cursor: comment.trim() ? 'pointer' : 'default', fontFamily: FONT }}>
-                          Send
-                        </button>
-                      </div>
-                    )}
+
+                  {/* Forum comment section */}
+                  <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 14 }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', marginBottom: 12 }}>
+                      Discussion · {commentCount} comment{commentCount !== 1 ? 's' : ''}
+                    </div>
+
+                    {/* Existing comments */}
+                    <CommentThread
+                      comments={comments}
+                      currentPlayer={playerName}
+                      compId={comp.id}
+                      onRefresh={() => loadComments(comp.id)}
+                    />
+
+                    {/* New comment input */}
+                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                      <input value={newComment} onChange={e => setNewComment(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleComment(comp.id); }}}
+                        placeholder="Add a comment…"
+                        style={{ flex: 1, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.09)', borderRadius: 10, padding: '9px 12px', color: '#fff', fontSize: 13, fontFamily: FONT, outline: 'none' }} />
+                      <button onClick={() => handleComment(comp.id)} disabled={!newComment.trim() || submitting}
+                        style={{ background: newComment.trim() ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.05)', border: 'none', borderRadius: 10, padding: '9px 14px', color: newComment.trim() ? '#000' : 'rgba(255,255,255,0.2)', fontSize: 13, fontWeight: 600, cursor: newComment.trim() ? 'pointer' : 'default', fontFamily: FONT, flexShrink: 0 }}>
+                        Post
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1214,7 +1345,7 @@ function PlayerCompReview({ playerName, onBack }) {
         <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'flex-end' }} onClick={() => setSuggestSlot(null)}>
           <div onClick={e => e.stopPropagation()} style={{ width: '100%', background: 'rgba(12,12,16,0.97)', backdropFilter: 'blur(40px)', borderRadius: '20px 20px 0 0', border: '1px solid rgba(255,255,255,0.08)', padding: 20, maxHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.4)', marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Suggest replacement for slot {suggestSlot.slotIndex + 1}</div>
-            <input autoFocus value={suggestSearch} onChange={e => setSuggestSearch(e.target.value)} placeholder="Search hero..."
+            <input autoFocus value={suggestSearch} onChange={e => setSuggestSearch(e.target.value)} placeholder="Search hero…"
               style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: '10px 14px', color: '#fff', fontSize: 14, fontFamily: FONT, outline: 'none', marginBottom: 10 }} />
             <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
               {suggestHeroes.map(hero => (
